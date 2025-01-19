@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lyrics Editor</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cabinet-grotesk/1.0.0/cabinet-grotesk.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            min-height: 100vh;
+            transition: all 0.3s ease;
+            font-family: 'Cabinet Grotesk', sans-serif;
+        }
+
+        body.dark {
+            background-color: #121212;
+            color: #fff;
+        }
+
+        body.light {
+            background-color: #fff;
+            color: #000;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 32px 24px;
+            position: relative;
+        }
+
+        .toolbar {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 12px;
+            background: rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 8px 16px;
+            border-radius: 8px;
+            z-index: 1000;
+        }
+
+        .toolbar button, .toolbar select {
+            background: none;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: currentColor;
+            opacity: 0.7;
+            cursor: pointer;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 4px 8px;
+            transition: all 0.2s;
+            font-family: inherit;
+            border-radius: 4px;
+        }
+
+        .toolbar button:hover, .toolbar select:hover {
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .header {
+            margin-bottom: 40px;
+            margin-top: 20px;
+        }
+
+        .title {
+            font-size: 32px;
+            font-weight: 500;
+            margin-bottom: 8px;
+            border: none;
+            background: none;
+            width: 100%;
+            color: currentColor;
+            outline: none;
+            letter-spacing: -0.3px;
+            transition: all 0.3s ease;
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: currentColor;
+            opacity: 0.5;
+            border: none;
+            background: none;
+            width: 100%;
+            outline: none;
+            letter-spacing: 0.2px;
+            transition: all 0.3s ease;
+        }
+
+        .lyrics {
+            white-space: pre-wrap;
+            line-height: 1.8;
+            font-size: 18px;
+            min-height: 70vh;
+            width: 100%;
+            background: none;
+            border: none;
+            color: currentColor;
+            outline: none;
+            resize: none;
+            font-family: inherit;
+            letter-spacing: -0.2px;
+            transition: all 0.3s ease;
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+        .lyrics:focus {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        /* Custom selection styles for different themes */
+        body.dark ::selection {
+            background: rgba(64, 156, 255, 0.4);
+            color: #fff;
+        }
+
+        body.light ::selection {
+            background: rgba(0, 122, 255, 0.2);
+            color: #000;
+        }
+
+        .copy-tooltip {
+            position: fixed;
+            background: rgba(0, 122, 255, 0.9);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            pointer-events: all;
+            transform: translate(-50%, -100%);
+            margin-top: -10px;
+            opacity: 0;
+            transition: all 0.2s;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            cursor: pointer;
+        }
+
+        .copy-tooltip:hover {
+            transform: translate(-50%, -100%) scale(1.05);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                max-width: 680px;
+                padding: 60px 40px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 24px 20px;
+            }
+            
+            .toolbar {
+                flex-wrap: wrap;
+                width: calc(100% - 40px);
+                top: auto;
+                bottom: 20px;
+                right: 20px;
+            }
+        }
+
+        /* Text formatting styles */
+        .lyrics[data-format="uppercase"] {
+            text-transform: uppercase;
+        }
+
+        .lyrics[data-format="lowercase"] {
+            text-transform: lowercase;
+        }
+
+        .lyrics[data-format="capitalize"] {
+            text-transform: capitalize;
+        }
+    </style>
+</head>
+<body class="dark">
+    <div class="container">
+        <div class="toolbar">
+            <select id="fontSize" onchange="updateFontSize(this.value)">
+                <option value="14">14px</option>
+                <option value="16">16px</option>
+                <option value="18" selected>18px</option>
+                <option value="20">20px</option>
+                <option value="24">24px</option>
+            </select>
+            <select id="textColor" onchange="updateTextColor(this.value)">
+                <option value="currentColor">Default</option>
+                <option value="#FF6B6B">Red</option>
+                <option value="#4ECDC4">Cyan</option>
+                <option value="#FFE66D">Yellow</option>
+                <option value="#95E1D3">Mint</option>
+            </select>
+            <select id="textFormat" onchange="updateTextFormat(this.value)">
+                <option value="normal">Normal</option>
+                <option value="uppercase">Uppercase</option>
+                <option value="lowercase">Lowercase</option>
+                <option value="capitalize">Capitalize</option>
+            </select>
+            <button onclick="toggleTheme()">Theme</button>
+        </div>
+        
+        <div class="header">
+            <input type="text" class="title" placeholder="Title">
+            <input type="text" class="subtitle" placeholder="Artist">
+        </div>
+        
+        <textarea class="lyrics" placeholder="Enter your lyrics here..."></textarea>
+    </div>
+
+    <script>
+        // Theme toggle
+        function toggleTheme() {
+            document.body.classList.toggle('dark');
+            document.body.classList.toggle('light');
+        }
+
+        // Font size update
+        function updateFontSize(size) {
+            document.querySelector('.lyrics').style.fontSize = `${size}px`;
+        }
+
+        // Text color update
+        function updateTextColor(color) {
+            document.querySelector('.lyrics').style.color = color;
+        }
+
+        // Text format update
+        function updateTextFormat(format) {
+            const lyrics = document.querySelector('.lyrics');
+            lyrics.dataset.format = format;
+        }
+
+        // Enhanced copy functionality
+        document.addEventListener('selectionchange', () => {
+            const selection = window.getSelection();
+            if (selection.toString().length > 0) {
+                showCopyButton(selection);
+            } else {
+                removeCopyButton();
+            }
+        });
+
+        function showCopyButton(selection) {
+            removeCopyButton();
+            
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            
+            const tooltip = document.createElement('div');
+            tooltip.className = 'copy-tooltip';
+            tooltip.textContent = 'Copy selection';
+            tooltip.style.left = `${rect.left + rect.width/2}px`;
+            tooltip.style.top = `${rect.top}px`;
+            
+            tooltip.addEventListener('click', () => {
+                navigator.clipboard.writeText(selection.toString());
+                tooltip.textContent = 'Copied!';
+                tooltip.style.background = 'rgba(46, 204, 113, 0.9)';
+                setTimeout(removeCopyButton, 1000);
+            });
+            
+            document.body.appendChild(tooltip);
+            setTimeout(() => tooltip.style.opacity = '1', 10);
+        }
+
+        function removeCopyButton() {
+            const existing = document.querySelector('.copy-tooltip');
+            if (existing) existing.remove();
+        }
+
+        // Improved textarea auto-resize
+        const textarea = document.querySelector('.lyrics');
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = `${this.scrollHeight}px`;
+        });
+
+        // Auto-select on focus with smooth highlight animation
+        const inputs = document.querySelectorAll('input, textarea');
+        inputs.forEach(input => {
+            input.addEventListener('focus', function() {
+                this.select();
+            });
+        });
+
+        // Save content to localStorage
+        function saveContent() {
+            const content = {
+                title: document.querySelector('.title').value,
+                subtitle: document.querySelector('.subtitle').value,
+                lyrics: document.querySelector('.lyrics').value,
+                fontSize: document.querySelector('#fontSize').value,
+                textColor: document.querySelector('#textColor').value,
+                textFormat: document.querySelector('#textFormat').value
+            };
+            localStorage.setItem('lyricsContent', JSON.stringify(content));
+        }
+
+        // Load content from localStorage
+        function loadContent() {
+            const content = JSON.parse(localStorage.getItem('lyricsContent'));
+            if (content) {
+                document.querySelector('.title').value = content.title || '';
+                document.querySelector('.subtitle').value = content.subtitle || '';
+                document.querySelector('.lyrics').value = content.lyrics || '';
+                document.querySelector('#fontSize').value = content.fontSize || '18';
+                document.querySelector('#textColor').value = content.textColor || 'currentColor';
+                document.querySelector('#textFormat').value = content.textFormat || 'normal';
+                
+                // Apply saved settings
+                updateFontSize(content.fontSize);
+                updateTextColor(content.textColor);
+                updateTextFormat(content.textFormat);
+            }
+        }
+
+        // Save content periodically and on changes
+        ['input', 'change'].forEach(event => {
+            document.addEventListener(event, saveContent);
+        });
+
+        // Load content on page load
+        window.addEventListener('load', loadContent);
+    </script>
+</body>
+</html>
