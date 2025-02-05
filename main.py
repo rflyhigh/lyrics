@@ -25,24 +25,34 @@ logger.addHandler(handler)
 
 app = Flask(__name__)
 
-# MongoDB configuration
-app.config["MONGO_URI"] = os.getenv("MONGO_URI", "mongodb://localhost:27017/documents_db")
-try:
-    mongo = PyMongo(app)
-    # Test the connection
-    mongo.db.command('ping')
-    logger.info("MongoDB connection successful")
-except Exception as e:
-    logger.error(f"MongoDB connection failed: {e}")
-    raise
+# MongoDB configuration with error handling
+def init_mongodb():
+    try:
+        mongo_uri = os.getenv("MONGO_URI")
+        if not mongo_uri:
+            raise ValueError("MONGO_URI environment variable is not set")
+            
+        app.config["MONGO_URI"] = mongo_uri
+        mongodb = PyMongo(app)
+        # Test the connection
+        mongodb.db.command('ping')
+        logger.info("MongoDB connection successful")
+        return mongodb
+    except Exception as e:
+        logger.error(f"MongoDB connection failed: {e}")
+        return None
+
+mongo = init_mongodb()
 
 # Health check setup
 health = HealthCheck()
 
 def mongo_available():
     try:
-        mongo.db.command('ping')
-        return True, "mongodb connection ok"
+        if mongo and mongo.db:
+            mongo.db.command('ping')
+            return True, "mongodb connection ok"
+        return False, "mongodb not initialized"
     except Exception as e:
         return False, str(e)
 
@@ -57,8 +67,27 @@ def generate_delete_code(length=8):
 
 @app.route('/publish', methods=['POST'])
 def publish_document():
+    if not mongo:
+        return jsonify({
+            'success': False,
+            'error': 'Database connection not available'
+        }), 503
+        
     try:
+        if not request.is_json:
+            return jsonify({
+                'success': False,
+                'error': 'Content-Type must be application/json'
+            }), 400
+            
         data = request.json
+        required_fields = ['title', 'content']
+        if not all(field in data for field in required_fields):
+            return jsonify({
+                'success': False,
+                'error': f'Missing required fields: {", ".join(required_fields)}'
+            }), 400
+            
         doc_id = generate_id()
         delete_code = generate_delete_code()
         
@@ -68,11 +97,11 @@ def publish_document():
             'title': data.get('title'),
             'author': data.get('author'),
             'content': data.get('content'),
-            'fontSize': data.get('fontSize'),
-            'textColor': data.get('textColor'),
-            'textFormat': data.get('textFormat'),
-            'lineHeight': data.get('lineHeight'),
-            'theme': data.get('theme'),
+            'fontSize': data.get('fontSize', '16px'),  # Default value
+            'textColor': data.get('textColor', '#000000'),  # Default value
+            'textFormat': data.get('textFormat', 'plain'),  # Default value
+            'lineHeight': data.get('lineHeight', '1.5'),  # Default value
+            'theme': data.get('theme', 'light'),  # Default value
             'created_at': datetime.utcnow()
         }
         
@@ -102,7 +131,19 @@ def publish_document():
 
 @app.route('/document/<doc_id>', methods=['GET'])
 def get_document(doc_id):
+    if not mongo:
+        return jsonify({
+            'success': False,
+            'error': 'Database connection not available'
+        }), 503
+        
     try:
+        if not doc_id:
+            return jsonify({
+                'success': False,
+                'error': 'Document ID is required'
+            }), 400
+            
         # Ensure the collection exists
         if 'documents' not in mongo.db.list_collection_names():
             return jsonify({
@@ -123,7 +164,8 @@ def get_document(doc_id):
                     'textColor': doc['textColor'],
                     'textFormat': doc['textFormat'],
                     'lineHeight': doc['lineHeight'],
-                    'theme': doc['theme']
+                    'theme': doc['theme'],
+                    'created_at': doc['created_at'].isoformat()
                 }
             })
         return jsonify({
@@ -145,6 +187,12 @@ def get_document(doc_id):
 
 @app.route('/delete/<doc_id>', methods=['DELETE'])
 def delete_document(doc_id):
+    if not mongo:
+        return jsonify({
+            'success': False,
+            'error': 'Database connection not available'
+        }), 503
+        
     delete_code = request.args.get('code')
     
     if not delete_code:
@@ -178,7 +226,8 @@ def delete_document(doc_id):
         mongo.db.documents.delete_one({'id': doc_id})
         
         return jsonify({
-            'success': True
+            'success': True,
+            'message': 'Document deleted successfully'
         })
     except PyMongoError as e:
         logger.error(f"Database error while deleting document: {e}")
@@ -194,6 +243,10 @@ def delete_document(doc_id):
         }), 500
 
 def cleanup_old_documents():
+    if not mongo:
+        logger.error("Cleanup failed: Database connection not available")
+        return
+        
     try:
         # Ensure the collection exists
         if 'documents' in mongo.db.list_collection_names():
@@ -212,4 +265,9 @@ if __name__ == '__main__':
     # Get port from environment variable or use default
     port = int(os.getenv('PORT', 5000))
     
-    app.run(host='0.0.0.0', port=port)
+    # Only run the app if MongoDB connection is successful
+    if mongo:
+        app.run(host='0.0.0.0', port=port)
+    else:
+        logger.error("Application failed to start: MongoDB connection not available")
+        exit(1)
