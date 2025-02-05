@@ -1,16 +1,19 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import random
 import string
 import time
 import threading
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from dotenv import load_dotenv
 import os
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 import pytz
+from waitress import serve
 
 # Load environment variables
 load_dotenv()
@@ -21,6 +24,14 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 CORS(app)
+
+# Configure rate limiter
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
+)
 
 # MongoDB Connection
 try:
@@ -34,7 +45,11 @@ except (ConnectionFailure, ServerSelectionTimeoutError) as e:
     raise
 
 def generate_id(length=5):
-    return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+    while True:
+        doc_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
+        # Check if ID already exists
+        if not db.documents.find_one({'id': doc_id}):
+            return doc_id
 
 def generate_delete_code(length=8):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
@@ -46,6 +61,7 @@ def keep_alive():
         time.sleep(300)
 
 @app.route('/publish', methods=['POST'])
+@limiter.limit("5 per minute")  # Specific limit for publishing
 def publish_document():
     try:
         data = request.json
@@ -81,6 +97,7 @@ def publish_document():
         }), 500
 
 @app.route('/document/<doc_id>', methods=['GET'])
+@limiter.limit("30 per minute")  # Specific limit for retrieving documents
 def get_document(doc_id):
     try:
         doc = db.documents.find_one({'id': doc_id})
@@ -111,6 +128,7 @@ def get_document(doc_id):
         }), 500
 
 @app.route('/delete/<doc_id>', methods=['DELETE'])
+@limiter.limit("10 per minute")  # Specific limit for deletions
 def delete_document(doc_id):
     delete_code = request.args.get('code')
     
@@ -147,17 +165,6 @@ def delete_document(doc_id):
             'error': 'Internal server error'
         }), 500
 
-def cleanup_old_documents():
-    while True:
-        try:
-            threshold = datetime.now(pytz.UTC) - timedelta(days=30)
-            db.documents.delete_many({'created_at': {'$lt': threshold}})
-            logger.info("Completed cleanup of old documents")
-        except Exception as e:
-            logger.error(f"Error during cleanup: {e}")
-        finally:
-            time.sleep(86400)
-
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({'error': 'Resource not found'}), 404
@@ -166,15 +173,20 @@ def not_found(e):
 def server_error(e):
     return jsonify({'error': 'Internal server error'}), 500
 
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return jsonify({'error': f"Rate limit exceeded. {e.description}"}), 429
+
 if __name__ == '__main__':
     try:
-        # Start background threads
+        # Start keep-alive thread
         threading.Thread(target=keep_alive, daemon=True).start()
-        threading.Thread(target=cleanup_old_documents, daemon=True).start()
         
         # Get port from environment variable or use default
         port = int(os.getenv('PORT', 5000))
         
-        app.run(host='0.0.0.0', port=port)
+        # Use Waitress instead of Flask's development server
+        logger.info(f"Starting production server on port {port}")
+        serve(app, host='0.0.0.0', port=port)
     except Exception as e:
         logger.error(f"Application startup failed: {e}")
