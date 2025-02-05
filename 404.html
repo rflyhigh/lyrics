@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script>
+        const path = window.location.pathname.substring(1);
+        if (path && path.length === 5) {
+            // Redirect to viewer with document ID
+            window.location.href = '/viewer.html?id=' + path;
+        } else {
+            // Redirect to editor for invalid paths
+            window.location.href = '/';
+        }
+    </script>
+</head>
+<body>
+    Redirecting...
+</body>
+</html>
