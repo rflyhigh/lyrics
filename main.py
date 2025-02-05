@@ -54,7 +54,7 @@ def connect_with_retry(max_retries=3, delay=5):
     for attempt in range(max_retries):
         logger.info(f"Attempting to connect to MongoDB (attempt {attempt + 1}/{max_retries})")
         db = init_mongodb()
-        if db:
+        if db is not None:  # Changed from if db:
             return db
         if attempt < max_retries - 1:
             time.sleep(delay)
@@ -70,7 +70,7 @@ def generate_delete_code(length=8):
 
 @app.route('/publish', methods=['POST'])
 def publish_document():
-    if not db:
+    if db is None:  # Changed from if not db:
         return jsonify({'success': False, 'error': 'Database connection not available'}), 503
         
     try:
@@ -112,7 +112,7 @@ def publish_document():
 
 @app.route('/document/<doc_id>', methods=['GET'])
 def get_document(doc_id):
-    if not db:
+    if db is None:  # Changed from if not db:
         return jsonify({'success': False, 'error': 'Database connection not available'}), 503
         
     try:
@@ -141,7 +141,7 @@ def get_document(doc_id):
 
 @app.route('/delete/<doc_id>', methods=['DELETE'])
 def delete_document(doc_id):
-    if not db:
+    if db is None:  # Changed from if not db:
         return jsonify({'success': False, 'error': 'Database connection not available'}), 503
         
     delete_code = request.args.get('code')
@@ -167,7 +167,7 @@ def delete_document(doc_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 def cleanup_old_documents():
-    if db:
+    if db is not None:  # Changed from if db:
         try:
             threshold = datetime.utcnow() - timedelta(days=30)
             result = db.documents.delete_many({'created_at': {'$lt': threshold}})
@@ -188,7 +188,7 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     
     # Run the app
-    if db:
+    if db is not None:  # Changed from if db:
         app.run(host='0.0.0.0', port=port)
     else:
         logger.error("Application failed to start: MongoDB connection not available")
