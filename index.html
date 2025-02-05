@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lyrics Editor</title>
+    <title>TypeIt</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cabinet-grotesk/1.0.0/cabinet-grotesk.css" rel="stylesheet">
     <style>
         * {
@@ -98,7 +98,7 @@
             padding: 0;
         }
 
-        .subtitle {
+        .author {
             font-size: 14px;
             color: currentColor;
             opacity: 0.5;
@@ -111,7 +111,7 @@
             padding: 0;
         }
 
-        .lyrics-container {
+        .content-container {
             white-space: pre-wrap;
             line-height: 1.8;
             font-size: 18px;
@@ -130,7 +130,7 @@
             position: relative;
         }
 
-        .lyrics-container:empty:before {
+        .content-container:empty:before {
             content: attr(placeholder);
             color: rgba(255, 255, 255, 0.3);
             pointer-events: none;
@@ -174,15 +174,20 @@
             background: rgba(255, 255, 255, 0.1);
         }
 
-        .clean-mode-toggle {
+        .bottom-toolbar {
             position: fixed;
             bottom: 20px;
             right: 20px;
+            display: flex;
+            gap: 8px;
+            z-index: 1001;
+        }
+
+        .bottom-toolbar button {
             background: rgba(0, 0, 0, 0.8);
             backdrop-filter: blur(10px);
             padding: 8px 16px;
             border-radius: 8px;
-            z-index: 1001;
             cursor: pointer;
             border: 1px solid rgba(255, 255, 255, 0.2);
             color: #fff;
@@ -192,8 +197,21 @@
             transition: all 0.2s;
         }
 
-        .clean-mode-toggle:hover {
+        .bottom-toolbar button:hover {
             background: rgba(255, 255, 255, 0.1);
+        }
+
+        .word-count {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 8px 16px;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 12px;
+            z-index: 1001;
         }
 
         /* Custom scrollbar */
@@ -225,6 +243,7 @@
 
             .toolbar {
                 padding: 6px;
+                gap: 4px;
             }
 
             .toolbar button, .toolbar select {
@@ -236,15 +255,64 @@
                 font-size: 24px;
             }
 
-            .lyrics-container {
+            .author {
+                font-size: 12px;
+            }
+
+            .content-container {
                 font-size: 16px;
             }
 
-            .clean-mode-toggle {
+            .bottom-toolbar {
                 bottom: 10px;
                 right: 10px;
+            }
+
+            .bottom-toolbar button {
                 font-size: 11px;
                 padding: 6px 12px;
+            }
+
+            .word-count {
+                bottom: 10px;
+                left: 10px;
+                font-size: 11px;
+                padding: 6px 12px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .toolbar {
+                justify-content: flex-start;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+
+            .toolbar button, .toolbar select {
+                font-size: 10px;
+                padding: 2px 4px;
+            }
+
+            .title {
+                font-size: 20px;
+            }
+
+            .author {
+                font-size: 10px;
+            }
+
+            .content-container {
+                font-size: 14px;
+            }
+
+            .bottom-toolbar button {
+                font-size: 10px;
+                padding: 4px 8px;
+            }
+
+            .word-count {
+                font-size: 10px;
+                padding: 4px 8px;
             }
         }
     </style>
@@ -272,22 +340,31 @@
                 <option value="lowercase">Lowercase</option>
                 <option value="capitalize">Capitalize</option>
             </select>
+            <select id="lineHeight" onchange="updateLineHeight(this.value)">
+                <option value="1.5">1.5x</option>
+                <option value="1.8" selected>1.8x</option>
+                <option value="2">2x</option>
+                <option value="2.5">2.5x</option>
+            </select>
             <button onclick="toggleTheme()">Theme</button>
+            <button onclick="downloadText()">Download</button>
         </div>
         
         <div class="header">
             <input type="text" class="title" placeholder="Title">
-            <input type="text" class="subtitle" placeholder="Artist">
+            <input type="text" class="author" placeholder="Author">
         </div>
         
-        <div class="lyrics-container" 
+        <div class="content-container" 
              contenteditable="true" 
-             placeholder="Enter your lyrics here..."
-             id="lyrics"></div>
+             placeholder="Start typing here..."
+             id="content"></div>
 
-        <button class="clean-mode-toggle" onclick="toggleCleanMode()">
-            Toggle Clean Mode
-        </button>
+        <div class="word-count">Words: 0</div>
+
+        <div class="bottom-toolbar">
+            <button onclick="toggleCleanMode()">Toggle Clean Mode</button>
+        </div>
     </div>
 
     <script>
@@ -302,13 +379,13 @@
         function toggleCleanMode() {
             cleanMode = !cleanMode;
             document.querySelector('.toolbar').classList.toggle('hidden');
-            document.querySelector('.clean-mode-toggle').textContent = 
+            document.querySelector('.bottom-toolbar button').textContent = 
                 cleanMode ? 'Show Tools' : 'Toggle Clean Mode';
             saveContent();
         }
 
         function updateFontSize(size) {
-            document.querySelector('.lyrics-container').style.fontSize = `${size}px`;
+            document.querySelector('.content-container').style.fontSize = `${size}px`;
             saveContent();
         }
 
@@ -318,7 +395,7 @@
                 document.execCommand('styleWithCSS', false, true);
                 document.execCommand('foreColor', false, color);
             } else {
-                document.querySelector('.lyrics-container').style.color = color;
+                document.querySelector('.content-container').style.color = color;
             }
             saveContent();
         }
@@ -331,9 +408,38 @@
                 const range = selection.getRangeAt(0);
                 range.surroundContents(span);
             } else {
-                document.querySelector('.lyrics-container').style.textTransform = format;
+                document.querySelector('.content-container').style.textTransform = format;
             }
             saveContent();
+        }
+
+        function updateLineHeight(height) {
+            document.querySelector('.content-container').style.lineHeight = height;
+            saveContent();
+        }
+
+        function downloadText() {
+            const title = document.querySelector('.title').value || 'Untitled';
+            const author = document.querySelector('.author').value;
+            const content = document.querySelector('.content-container').innerText;
+            
+            const text = `${title}\n${author ? 'By ' + author + '\n' : ''}\n${content}`;
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${title.toLowerCase().replace(/\s+/g, '-')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function updateWordCount() {
+            const content = document.querySelector('.content-container').innerText;
+            const wordCount = content.trim() ? content.trim().split(/\s+/).length : 0;
+            document.querySelector('.word-count').textContent = `Words: ${wordCount}`;
         }
 
         function showSelectionToolbar(selection) {
@@ -386,6 +492,61 @@
             if (existing) existing.remove();
         }
 
+        function saveContent() {
+            const content = {
+                title: document.querySelector('.title').value,
+                author: document.querySelector('.author').value,
+                content: document.querySelector('.content-container').innerHTML,
+                fontSize: document.querySelector('#fontSize').value,
+                textColor: document.querySelector('#textColor').value,
+                textFormat: document.querySelector('#textFormat').value,
+                lineHeight: document.querySelector('#lineHeight').value,
+                theme: document.body.classList.contains('dark') ? 'dark' : 'light',
+                cleanMode: cleanMode
+            };
+            localStorage.setItem('typeItContent', JSON.stringify(content));
+        }
+
+        function loadContent() {
+            const content = JSON.parse(localStorage.getItem('typeItContent'));
+            if (content) {
+                document.querySelector('.title').value = content.title || '';
+                document.querySelector('.author').value = content.author || '';
+                document.querySelector('.content-container').innerHTML = content.content || '';
+                document.querySelector('#fontSize').value = content.fontSize || '18';
+                document.querySelector('#textColor').value = content.textColor || 'inherit';
+                document.querySelector('#textFormat').value = content.textFormat || 'none';
+                document.querySelector('#lineHeight').value = content.lineHeight || '1.8';
+                
+                if (content.theme === 'light') {
+                    document.body.classList.remove('dark');
+                    document.body.classList.add('light');
+                }
+                
+                updateFontSize(content.fontSize);
+                updateLineHeight(content.lineHeight);
+                document.querySelector('.content-container').style.color = content.textColor;
+                document.querySelector('.content-container').style.textTransform = content.textFormat;
+                
+                if (content.cleanMode) {
+                    cleanMode = true;
+                    document.querySelector('.toolbar').classList.add('hidden');
+                    document.querySelector('.bottom-toolbar button').textContent = 'Show Tools';
+                }
+
+                updateWordCount();
+            }
+        }
+
+        document.addEventListener('input', (e) => {
+            saveContent();
+            if (e.target.classList.contains('content-container')) {
+                updateWordCount();
+            }
+        });
+
+        document.addEventListener('change', saveContent);
+
         document.addEventListener('selectionchange', () => {
             const selection = window.getSelection();
             if (selection.toString().length > 0) {
@@ -395,59 +556,23 @@
             }
         });
 
-        function saveContent() {
-            const content = {
-                title: document.querySelector('.title').value,
-                subtitle: document.querySelector('.subtitle').value,
-                lyrics: document.querySelector('.lyrics-container').innerHTML,
-                fontSize: document.querySelector('#fontSize').value,
-                textColor: document.querySelector('#textColor').value,
-                textFormat: document.querySelector('#textFormat').value,
-                theme: document.body.classList.contains('dark') ? 'dark' : 'light',
-                cleanMode: cleanMode
-            };
-            localStorage.setItem('lyricsContent', JSON.stringify(content));
-        }
-
-        function loadContent() {
-            const content = JSON.parse(localStorage.getItem('lyricsContent'));
-            if (content) {
-                document.querySelector('.title').value = content.title || '';
-                document.querySelector('.subtitle').value = content.subtitle || '';
-                document.querySelector('.lyrics-container').innerHTML = content.lyrics || '';
-                document.querySelector('#fontSize').value = content.fontSize || '18';
-                document.querySelector('#textColor').value = content.textColor || 'inherit';
-                document.querySelector('#textFormat').value = content.textFormat || 'none';
-                
-                if (content.theme === 'light') {
-                    document.body.classList.remove('dark');
-                    document.body.classList.add('light');
-                }
-                
-                updateFontSize(content.fontSize);
-                document.querySelector('.lyrics-container').style.color = content.textColor;
-                document.querySelector('.lyrics-container').style.textTransform = content.textFormat;
-                
-                if (content.cleanMode) {
-                    cleanMode = true;
-                    document.querySelector('.toolbar').classList.add('hidden');
-                    document.querySelector('.clean-mode-toggle').textContent = 'Show Tools';
-                }
-            }
-        }
-
-        document.addEventListener('input', saveContent);
-        document.addEventListener('change', saveContent);
         window.addEventListener('load', loadContent);
 
         document.addEventListener('keydown', (e) => {
+            // Toggle clean mode with Ctrl/Cmd + Shift + C
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
                 e.preventDefault();
                 toggleCleanMode();
             }
+            // Toggle theme with Ctrl/Cmd + Shift + T
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
                 e.preventDefault();
                 toggleTheme();
+            }
+            // Save with Ctrl/Cmd + S
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                downloadText();
             }
         });
     </script>
