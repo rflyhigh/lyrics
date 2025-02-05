@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
-from flask_pymongo import PyMongo
-from pymongo.errors import ConnectionFailure
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 from apscheduler.schedulers.background import BackgroundScheduler
 import random
 import string
@@ -23,43 +23,44 @@ handler.setFormatter(logging.Formatter(
 ))
 logger.addHandler(handler)
 
-# Initialize Flask app
 app = Flask(__name__)
 
 # MongoDB configuration
-def configure_mongodb():
-    mongo_uri = os.getenv("MONGO_URI")
-    if not mongo_uri:
-        logger.error("MONGO_URI environment variable is not set")
-        return None
-    
-    app.config["MONGO_URI","mongodb+srv://Shekhar:Shekhar9330@sharelyrics.bhpkq.mongodb.net/?retryWrites=true&w=majority&appName=Sharelyrics"] = mongo_uri
-    return PyMongo(app)
-
-def verify_mongodb_connection(mongo_client):
+def init_mongodb():
     try:
-        # The ping command is cheaper than the ismaster command and
-        # raises an exception if cannot connect to the database
-        mongo_client.db.command('ping')
-        logger.info("MongoDB connection successful")
-        return True
-    except ConnectionFailure as e:
-        logger.error(f"MongoDB server not available: {e}")
-        return False
+        mongo_uri = os.getenv("MONGODB_URI")
+        if not mongo_uri:
+            logger.error("MONGODB_URI environment variable is not set")
+            return None
+
+        # Initialize MongoDB client
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+        
+        # Test connection
+        try:
+            client.admin.command('ping')
+            db = client[os.getenv('MONGODB_DB', 'share_db')]
+            logger.info("MongoDB connection successful")
+            return db
+        except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+            logger.error(f"MongoDB server not available: {e}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"MongoDB connection failed: {e}")
+        return None
 
 def connect_with_retry(max_retries=3, delay=5):
     for attempt in range(max_retries):
         logger.info(f"Attempting to connect to MongoDB (attempt {attempt + 1}/{max_retries})")
-        try:
-            mongodb = configure_mongodb()
-            if mongodb and verify_mongodb_connection(mongodb):
-                return mongodb
-        except Exception as e:
-            logger.error(f"MongoDB connection failed: {e}")
-        
+        db = init_mongodb()
+        if db:
+            return db
         if attempt < max_retries - 1:
             time.sleep(delay)
     return None
+
+db = None  # Initialize as None
 
 def generate_id(length=5):
     return ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
@@ -69,7 +70,7 @@ def generate_delete_code(length=8):
 
 @app.route('/publish', methods=['POST'])
 def publish_document():
-    if not mongo or not hasattr(mongo, 'db'):
+    if not db:
         return jsonify({'success': False, 'error': 'Database connection not available'}), 503
         
     try:
@@ -94,7 +95,7 @@ def publish_document():
             'created_at': datetime.utcnow()
         }
         
-        result = mongo.db.documents.insert_one(document)
+        result = db.documents.insert_one(document)
         
         if result.inserted_id:
             return jsonify({
@@ -111,11 +112,11 @@ def publish_document():
 
 @app.route('/document/<doc_id>', methods=['GET'])
 def get_document(doc_id):
-    if not mongo or not hasattr(mongo, 'db'):
+    if not db:
         return jsonify({'success': False, 'error': 'Database connection not available'}), 503
         
     try:
-        doc = mongo.db.documents.find_one({'id': doc_id})
+        doc = db.documents.find_one({'id': doc_id})
         
         if doc:
             return jsonify({
@@ -140,7 +141,7 @@ def get_document(doc_id):
 
 @app.route('/delete/<doc_id>', methods=['DELETE'])
 def delete_document(doc_id):
-    if not mongo or not hasattr(mongo, 'db'):
+    if not db:
         return jsonify({'success': False, 'error': 'Database connection not available'}), 503
         
     delete_code = request.args.get('code')
@@ -149,7 +150,7 @@ def delete_document(doc_id):
         return jsonify({'success': False, 'error': 'Delete code required'}), 400
     
     try:
-        result = mongo.db.documents.delete_one({
+        result = db.documents.delete_one({
             'id': doc_id,
             'delete_code': delete_code
         })
@@ -166,21 +167,17 @@ def delete_document(doc_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 def cleanup_old_documents():
-    if mongo and hasattr(mongo, 'db'):
+    if db:
         try:
             threshold = datetime.utcnow() - timedelta(days=30)
-            result = mongo.db.documents.delete_many({'created_at': {'$lt': threshold}})
+            result = db.documents.delete_many({'created_at': {'$lt': threshold}})
             logger.info(f"Cleaned up {result.deleted_count} old documents")
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
 
 if __name__ == '__main__':
     # Initialize MongoDB connection with retries
-    mongo = connect_with_retry(max_retries=3, delay=5)
-    
-    if not mongo:
-        logger.error("Application failed to start: MongoDB connection not available")
-        exit(1)
+    db = connect_with_retry(max_retries=3, delay=5)
     
     # Initialize scheduler for cleanup
     scheduler = BackgroundScheduler()
@@ -191,4 +188,8 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     
     # Run the app
-    app.run(host='0.0.0.0', port=port)
+    if db:
+        app.run(host='0.0.0.0', port=port)
+    else:
+        logger.error("Application failed to start: MongoDB connection not available")
+        exit(1)
