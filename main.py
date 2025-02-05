@@ -1,4 +1,3 @@
-# app.py
 from flask import Flask, request, jsonify
 from flask_pymongo import PyMongo
 from pymongo.errors import PyMongoError
@@ -12,8 +11,10 @@ from dotenv import load_dotenv
 import os
 from logging.handlers import RotatingFileHandler
 
+# Load environment variables
 load_dotenv()
 
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 handler = RotatingFileHandler('app.log', maxBytes=10000000, backupCount=5)
@@ -24,9 +25,18 @@ logger.addHandler(handler)
 
 app = Flask(__name__)
 
+# MongoDB configuration
 app.config["MONGO_URI"] = os.getenv("MONGO_URI", "mongodb://localhost:27017/documents_db")
-mongo = PyMongo(app)
+try:
+    mongo = PyMongo(app)
+    # Test the connection
+    mongo.db.command('ping')
+    logger.info("MongoDB connection successful")
+except Exception as e:
+    logger.error(f"MongoDB connection failed: {e}")
+    raise
 
+# Health check setup
 health = HealthCheck()
 
 def mongo_available():
@@ -66,6 +76,10 @@ def publish_document():
             'created_at': datetime.utcnow()
         }
         
+        # Ensure the collection exists
+        if 'documents' not in mongo.db.list_collection_names():
+            mongo.db.create_collection('documents')
+        
         mongo.db.documents.insert_one(document)
         
         return jsonify({
@@ -89,6 +103,13 @@ def publish_document():
 @app.route('/document/<doc_id>', methods=['GET'])
 def get_document(doc_id):
     try:
+        # Ensure the collection exists
+        if 'documents' not in mongo.db.list_collection_names():
+            return jsonify({
+                'success': False,
+                'error': 'Document not found'
+            }), 404
+            
         doc = mongo.db.documents.find_one({'id': doc_id})
         
         if doc:
@@ -133,6 +154,13 @@ def delete_document(doc_id):
         }), 400
     
     try:
+        # Ensure the collection exists
+        if 'documents' not in mongo.db.list_collection_names():
+            return jsonify({
+                'success': False,
+                'error': 'Document not found'
+            }), 404
+            
         doc = mongo.db.documents.find_one({'id': doc_id})
         
         if not doc:
@@ -167,17 +195,21 @@ def delete_document(doc_id):
 
 def cleanup_old_documents():
     try:
-        threshold = datetime.utcnow() - timedelta(days=30)
-        result = mongo.db.documents.delete_many({'created_at': {'$lt': threshold}})
-        logger.info(f"Cleaned up {result.deleted_count} old documents")
+        # Ensure the collection exists
+        if 'documents' in mongo.db.list_collection_names():
+            threshold = datetime.utcnow() - timedelta(days=30)
+            result = mongo.db.documents.delete_many({'created_at': {'$lt': threshold}})
+            logger.info(f"Cleaned up {result.deleted_count} old documents")
     except Exception as e:
         logger.error(f"Error during cleanup: {e}")
 
 if __name__ == '__main__':
+    # Initialize scheduler
     scheduler = BackgroundScheduler()
     scheduler.add_job(cleanup_old_documents, 'interval', hours=24)
     scheduler.start()
     
+    # Get port from environment variable or use default
     port = int(os.getenv('PORT', 5000))
     
     app.run(host='0.0.0.0', port=port)
