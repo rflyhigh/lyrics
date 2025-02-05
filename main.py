@@ -1,15 +1,17 @@
 from flask import Flask, request, jsonify
 from flask_pymongo import PyMongo
-from pymongo.errors import PyMongoError
+from pymongo.errors import PyMongoError, ConnectionFailure
 from apscheduler.schedulers.background import BackgroundScheduler
 from healthcheck import HealthCheck
 import random
 import string
 import logging
+import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
 from logging.handlers import RotatingFileHandler
+import urllib.parse
 
 # Load environment variables
 load_dotenv()
@@ -25,19 +27,36 @@ logger.addHandler(handler)
 
 app = Flask(__name__)
 
-# MongoDB configuration with error handling
+# MongoDB configuration with enhanced error handling
 def init_mongodb():
     try:
         mongo_uri = os.getenv("MONGO_URI")
         if not mongo_uri:
+            logger.error("MONGO_URI environment variable is not set")
             raise ValueError("MONGO_URI environment variable is not set")
-            
+
+        # Add database name if not present in URI
+        if '?' in mongo_uri and not any(param.startswith('dbname=') for param in mongo_uri.split('?')[1].split('&')):
+            mongo_uri = mongo_uri.replace('?', '/documents_db?')
+        elif '?' not in mongo_uri:
+            if mongo_uri.endswith('/'):
+                mongo_uri += 'documents_db'
+            else:
+                mongo_uri += '/documents_db'
+
+        # Configure Flask app with MongoDB URI
         app.config["MONGO_URI"] = mongo_uri
+        
+        # Initialize PyMongo
         mongodb = PyMongo(app)
-        # Test the connection
-        mongodb.db.command('ping')
+        
+        # Test connection with timeout
+        mongodb.db.client.server_info()
         logger.info("MongoDB connection successful")
         return mongodb
+    except ConnectionFailure as e:
+        logger.error(f"MongoDB connection failed - could not connect to server: {e}")
+        return None
     except Exception as e:
         logger.error(f"MongoDB connection failed: {e}")
         return None
@@ -50,7 +69,7 @@ health = HealthCheck()
 def mongo_available():
     try:
         if mongo and mongo.db:
-            mongo.db.command('ping')
+            mongo.db.client.server_info()
             return True, "mongodb connection ok"
         return False, "mongodb not initialized"
     except Exception as e:
@@ -97,25 +116,31 @@ def publish_document():
             'title': data.get('title'),
             'author': data.get('author'),
             'content': data.get('content'),
-            'fontSize': data.get('fontSize', '16px'),  # Default value
-            'textColor': data.get('textColor', '#000000'),  # Default value
-            'textFormat': data.get('textFormat', 'plain'),  # Default value
-            'lineHeight': data.get('lineHeight', '1.5'),  # Default value
-            'theme': data.get('theme', 'light'),  # Default value
+            'fontSize': data.get('fontSize', '16px'),
+            'textColor': data.get('textColor', '#000000'),
+            'textFormat': data.get('textFormat', 'plain'),
+            'lineHeight': data.get('lineHeight', '1.5'),
+            'theme': data.get('theme', 'light'),
             'created_at': datetime.utcnow()
         }
         
-        # Ensure the collection exists
+        # Ensure the collection exists and create index if needed
         if 'documents' not in mongo.db.list_collection_names():
             mongo.db.create_collection('documents')
+            mongo.db.documents.create_index('id', unique=True)
+            mongo.db.documents.create_index('created_at')
         
-        mongo.db.documents.insert_one(document)
+        result = mongo.db.documents.insert_one(document)
         
-        return jsonify({
-            'success': True,
-            'id': doc_id,
-            'delete_code': delete_code
-        })
+        if result.inserted_id:
+            return jsonify({
+                'success': True,
+                'id': doc_id,
+                'delete_code': delete_code
+            })
+        else:
+            raise PyMongoError("Failed to insert document")
+            
     except PyMongoError as e:
         logger.error(f"Database error while publishing document: {e}")
         return jsonify({
@@ -223,12 +248,16 @@ def delete_document(doc_id):
                 'error': 'Invalid delete code'
             }), 403
         
-        mongo.db.documents.delete_one({'id': doc_id})
+        result = mongo.db.documents.delete_one({'id': doc_id})
         
-        return jsonify({
-            'success': True,
-            'message': 'Document deleted successfully'
-        })
+        if result.deleted_count:
+            return jsonify({
+                'success': True,
+                'message': 'Document deleted successfully'
+            })
+        else:
+            raise PyMongoError("Failed to delete document")
+            
     except PyMongoError as e:
         logger.error(f"Database error while deleting document: {e}")
         return jsonify({
@@ -257,6 +286,19 @@ def cleanup_old_documents():
         logger.error(f"Error during cleanup: {e}")
 
 if __name__ == '__main__':
+    retries = 3
+    retry_delay = 5  # seconds
+    
+    # Try to establish MongoDB connection with retries
+    for attempt in range(retries):
+        if not mongo:
+            logger.info(f"Attempting to connect to MongoDB (attempt {attempt + 1}/{retries})")
+            mongo = init_mongodb()
+            if mongo:
+                break
+            if attempt < retries - 1:
+                time.sleep(retry_delay)
+    
     # Initialize scheduler
     scheduler = BackgroundScheduler()
     scheduler.add_job(cleanup_old_documents, 'interval', hours=24)
@@ -269,5 +311,5 @@ if __name__ == '__main__':
     if mongo:
         app.run(host='0.0.0.0', port=port)
     else:
-        logger.error("Application failed to start: MongoDB connection not available")
+        logger.error("Application failed to start: MongoDB connection not available after retries")
         exit(1)
