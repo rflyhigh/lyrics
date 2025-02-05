@@ -145,20 +145,19 @@
             border-radius: 8px;
             font-size: 12px;
             pointer-events: all;
-            transform: translate(-50%, -100%);
-            margin-top: -10px;
             opacity: 0;
-            transition: all 0.2s;
+            transition: opacity 0.2s;
             backdrop-filter: blur(8px);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
             display: flex;
-            gap: 4px;
+            gap: 8px;
             z-index: 1000;
             flex-wrap: wrap;
             max-width: 90vw;
             justify-content: center;
+            transform: translateX(-50%); /* Center horizontally */
         }
-
+        
         .selection-toolbar button {
             background: none;
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -169,9 +168,25 @@
             font-size: 11px;
             transition: all 0.2s;
         }
+        
+        .selection-toolbar button:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        @media (max-width: 768px) {
+            .selection-toolbar {
+                transform: none;
+                left: 10px !important;
+                right: 10px;
+                top: auto !important;
+                bottom: 10px;
+                max-width: calc(100vw - 20px); 
+            }
+        }
 
         .selection-toolbar button:hover {
             background: rgba(255, 255, 255, 0.1);
+            
         }
 
         .bottom-toolbar {
@@ -214,7 +229,7 @@
             z-index: 1001;
         }
 
-        /* Custom scrollbar */
+     
         ::-webkit-scrollbar {
             width: 6px;
         }
@@ -363,7 +378,7 @@
         <div class="word-count">Words: 0</div>
 
         <div class="bottom-toolbar">
-            <button onclick="toggleCleanMode()">Toggle Clean Mode</button>
+            <button onclick="toggleCleanMode()">Clean Mode</button>
         </div>
     </div>
 
@@ -380,7 +395,7 @@
             cleanMode = !cleanMode;
             document.querySelector('.toolbar').classList.toggle('hidden');
             document.querySelector('.bottom-toolbar button').textContent = 
-                cleanMode ? 'Show Tools' : 'Toggle Clean Mode';
+                cleanMode ? 'Show Tools' : 'Clean Mode';
             saveContent();
         }
 
@@ -443,49 +458,58 @@
         }
 
         function showSelectionToolbar(selection) {
-            removeSelectionToolbar();
-            
-            if (!selection.toString()) return;
-            
-            const range = selection.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
-            
-            const toolbar = document.createElement('div');
-            toolbar.className = 'selection-toolbar';
-            
-            const colors = {
-                'Default': 'inherit',
-                'Red': '#FF6B6B',
-                'Cyan': '#4ECDC4',
-                'Yellow': '#FFE66D',
-                'Mint': '#95E1D3'
-            };
-
-            Object.entries(colors).forEach(([name, color]) => {
-                const button = document.createElement('button');
-                button.textContent = name;
-                button.style.color = color;
-                button.onclick = () => {
-                    updateTextColor(color);
-                    removeSelectionToolbar();
-                };
-                toolbar.appendChild(button);
-            });
-
-            const copyButton = document.createElement('button');
-            copyButton.textContent = 'Copy';
-            copyButton.onclick = () => {
-                navigator.clipboard.writeText(selection.toString());
-                removeSelectionToolbar();
-            };
-            toolbar.appendChild(copyButton);
-            
-            toolbar.style.left = `${rect.left + rect.width/2}px`;
-            toolbar.style.top = `${rect.top}px`;
-            
-            document.body.appendChild(toolbar);
-            setTimeout(() => toolbar.style.opacity = '1', 10);
-        }
+          removeSelectionToolbar();
+      
+          if (!selection.toString()) return;
+      
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+      
+          const toolbar = document.createElement('div');
+          toolbar.className = 'selection-toolbar';
+      
+          const colors = {
+              'Default': 'inherit',
+              'Red': '#FF6B6B',
+              'Cyan': '#4ECDC4',
+              'Yellow': '#FFE66D',
+              'Mint': '#95E1D3'
+          };
+      
+          Object.entries(colors).forEach(([name, color]) => {
+              const button = document.createElement('button');
+              button.textContent = name;
+              button.style.color = color;
+              button.onclick = () => {
+                  updateTextColor(color);
+                  removeSelectionToolbar();
+              };
+              toolbar.appendChild(button);
+          });
+      
+          const copyButton = document.createElement('button');
+          copyButton.textContent = 'Copy';
+          copyButton.onclick = () => {
+              navigator.clipboard.writeText(selection.toString());
+              removeSelectionToolbar();
+          };
+          toolbar.appendChild(copyButton);
+      
+          // Position the toolbar based on screen size
+          const isMobile = window.innerWidth <= 768; // Adjust breakpoint as needed
+          if (isMobile) {
+              // Position toolbar below the selection on mobile
+              toolbar.style.left = `${rect.left}px`;
+              toolbar.style.top = `${rect.bottom + 10}px`; // Add some spacing
+          } else {
+              // Position toolbar above the selection on desktop
+              toolbar.style.left = `${rect.left + rect.width / 2}px`;
+              toolbar.style.top = `${rect.top - 50}px`; // Adjust vertical position
+          }
+      
+          document.body.appendChild(toolbar);
+          setTimeout(() => toolbar.style.opacity = '1', 10);
+      }
 
         function removeSelectionToolbar() {
             const existing = document.querySelector('.selection-toolbar');
@@ -559,17 +583,17 @@
         window.addEventListener('load', loadContent);
 
         document.addEventListener('keydown', (e) => {
-            // Toggle clean mode with Ctrl/Cmd + Shift + C
+
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'C') {
                 e.preventDefault();
                 toggleCleanMode();
             }
-            // Toggle theme with Ctrl/Cmd + Shift + T
+
             if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
                 e.preventDefault();
                 toggleTheme();
             }
-            // Save with Ctrl/Cmd + S
+
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
                 downloadText();
