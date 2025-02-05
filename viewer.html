@@ -29,6 +29,28 @@
             color: #000;
         }
 
+        .top-header {
+            width: 100%;
+            padding: 15px 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .top-header a {
+            color: #fff;
+            text-decoration: none;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+            transition: opacity 0.2s;
+        }
+
+        .top-header a:hover {
+            opacity: 0.8;
+        }
+
         .container {
             width: 100%;
             max-width: 800px;
@@ -124,6 +146,20 @@
             margin-top: 15px;
         }
 
+        .modal button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .modal button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -174,6 +210,11 @@
     </style>
 </head>
 <body class="dark">
+    <div class="top-header">
+        <a href="https://share.versz.fun/">← Home</a>
+        <a href="https://share.versz.fun/">Create your own</a>
+    </div>
+
     <div class="container">
         <div class="header">
             <h1 class="title"></h1>
@@ -183,7 +224,7 @@
         <div class="content"></div>
 
         <div class="bottom-toolbar">
-            <button onclick="showDeleteModal()">Delete Document</button>
+            <button onclick="showDeleteModal()">Delete Content</button>
         </div>
     </div>
 
@@ -200,18 +241,24 @@
             }, 3000);
         }
 
+        function closeModal() {
+            const modalOverlay = document.querySelector('.modal-overlay');
+            const modal = document.querySelector('.modal');
+            if (modalOverlay) modalOverlay.remove();
+            if (modal) modal.remove();
+        }
+
         function showDeleteModal() {
             const modal = document.createElement('div');
             modal.innerHTML = `
                 <div class="modal-overlay"></div>
                 <div class="modal">
-                    <h3>Delete Document</h3>
-                    <p>Enter the delete code to remove this document:</p>
+                    <h3>Delete Content</h3>
+                    <p>Enter the delete code to remove this content:</p>
                     <input type="text" id="deleteCode" placeholder="Delete Code">
                     <div class="modal-buttons">
                         <button onclick="deleteDocument()">Delete</button>
-                        <button onclick="document.body.removeChild(document.querySelector('.modal-overlay'));
-                                       document.body.removeChild(this.closest('.modal'))">Cancel</button>
+                        <button onclick="closeModal()">Cancel</button>
                     </div>
                 </div>
             `;
@@ -230,12 +277,12 @@
 
                 const data = await response.json();
                 if (data.success) {
-                    showToast('Document deleted successfully');
+                    showToast('Content deleted successfully');
                     setTimeout(() => {
-                        window.location.href = '/';
+                        window.location.href = 'https://share.versz.fun/';
                     }, 1500);
                 } else {
-                    showToast(data.error || 'Error deleting document');
+                    showToast(data.error || 'Error deleting content');
                 }
             } catch (error) {
                 showToast('Error connecting to server');
@@ -280,7 +327,7 @@
                 } else {
                     showToast('Document not found');
                     setTimeout(() => {
-                        window.location.href = '/';
+                        window.location.href = 'https://share.versz.fun/';
                     }, 1500);
                 }
             } catch (error) {
