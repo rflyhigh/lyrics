@@ -56,6 +56,7 @@ db = client[os.getenv('MONGODB_DB', 'documents_db')]
 
 try:
     db.documents.create_index([("id", ASCENDING)], unique=True)
+    db.documents.create_index([("custom_url", ASCENDING)], unique=True, sparse=True)
     db.documents.create_index([("created_at", ASCENDING)])
 except Exception as e:
     logger.error(f"Failed to create indexes: {e}")
@@ -92,22 +93,32 @@ def health_check():
         }), 500
 
 def validate_custom_url(url):
-    """
-    Validates a custom URL against the following rules:
-    - Length between 3 and 50 characters
-    - Only alphanumeric characters allowed
-    - No spaces or special characters
-    """
+    if not url:
+        return True
     if not 3 <= len(url) <= 50:
         return False
-    
-    return bool(re.match('^[a-zA-Z0-9]+$', url))
+    return bool(re.match('^[a-zA-Z0-9-]+$', url))
 
-def is_url_available(custom_url):
-    """
-    Checks if a custom URL is available
-    """
-    return not db.documents.find_one({'custom_url': custom_url})
+@app.route('/check-url/<custom_url>', methods=['GET'])
+@limiter.limit("20 per minute")
+def check_url_availability(custom_url):
+    try:
+        if not validate_custom_url(custom_url):
+            return jsonify({
+                'available': False,
+                'error': 'Invalid URL format'
+            })
+        
+        exists = db.documents.find_one({'custom_url': custom_url}) is not None
+        return jsonify({
+            'available': not exists
+        })
+    except Exception as e:
+        logger.error(f"Error checking URL availability: {e}")
+        return jsonify({
+            'available': False,
+            'error': 'Internal server error'
+        }), 500
 
 @app.route('/publish', methods=['POST'])
 @limiter.limit("5 per minute")
@@ -127,40 +138,27 @@ def publish_document():
                 'error': f'Missing required fields: {", ".join(required_fields)}'
             }), 400
 
-        # Handle custom URL if provided
         custom_url = data.get('custom_url')
-        doc_id = None
-        
-        if custom_url:
-            if not validate_custom_url(custom_url):
-                return jsonify({
-                    'success': False,
-                    'error': 'Invalid custom URL. Must be 3-50 alphanumeric characters only.'
-                }), 400
-                
-            if not is_url_available(custom_url):
-                return jsonify({
-                    'success': False,
-                    'error': 'Custom URL is already taken'
-                }), 400
-                
-            doc_id = custom_url
-        else:
-            doc_id = generate_id()
+        if custom_url and not validate_custom_url(custom_url):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid custom URL format'
+            }), 400
 
+        doc_id = custom_url if custom_url else generate_id()
         delete_code = generate_delete_code()
         
         document = {
             'id': doc_id,
-            'custom_url': custom_url if custom_url else None,
+            'custom_url': custom_url,
             'delete_code': delete_code,
             'title': data.get('title'),
             'author': data.get('author'),
             'content': data.get('content'),
-            'font_size': data.get('fontSize', '16px'),
-            'text_color': data.get('textColor', '#000000'),
-            'text_format': data.get('textFormat', 'plain'),
-            'line_height': data.get('lineHeight', '1.5'),
+            'fontSize': data.get('fontSize', '16px'),
+            'textColor': data.get('textColor', '#000000'),
+            'textFormat': data.get('textFormat', 'none'),
+            'lineHeight': data.get('lineHeight', '1.5'),
             'theme': data.get('theme', 'light'),
             'created_at': datetime.now(pytz.UTC)
         }
@@ -183,7 +181,6 @@ def publish_document():
 @limiter.limit("30 per minute")
 def get_document(doc_id):
     try:
-        # Check both id and custom_url fields
         doc = db.documents.find_one({
             '$or': [
                 {'id': doc_id},
@@ -196,13 +193,13 @@ def get_document(doc_id):
                 'success': True,
                 'document': {
                     'title': doc['title'],
-                    'author': doc['author'],
+                    'author': doc.get('author', ''),
                     'content': doc['content'],
-                    'fontSize': doc['font_size'],
-                    'textColor': doc['text_color'],
-                    'textFormat': doc['text_format'],
-                    'lineHeight': doc['line_height'],
-                    'theme': doc['theme'],
+                    'fontSize': doc.get('fontSize', '16px'),
+                    'textColor': doc.get('textColor', '#000000'),
+                    'textFormat': doc.get('textFormat', 'none'),
+                    'lineHeight': doc.get('lineHeight', '1.5'),
+                    'theme': doc.get('theme', 'light'),
                     'created_at': doc['created_at'].isoformat()
                 }
             })
@@ -230,8 +227,10 @@ def delete_document(doc_id):
     
     try:
         result = db.documents.delete_one({
-            'id': doc_id,
-            'delete_code': delete_code
+            '$or': [
+                {'id': doc_id, 'delete_code': delete_code},
+                {'custom_url': doc_id, 'delete_code': delete_code}
+            ]
         })
         
         if result.deleted_count == 0:
