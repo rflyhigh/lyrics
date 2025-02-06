@@ -5,3 +5,4 @@ pymongo==4.6.1
 pytz==2024.1
 flask-limiter 
 waitress
+apscheduler
