@@ -470,13 +470,13 @@
         let cleanMode = false;
         let customUrlCheckTimeout;
 
-        // Check if we're on a document path and redirect if necessary
-        (function() {
-            const path = window.location.pathname.substring(1);
-            if (path && path !== 'index.html') {
-                window.location.href = `/viewer.html?id=${path}`;
-            }
-        })();
+        
+       
+        const path = window.location.pathname.substring(1);
+        if (path && path !== 'index.html') {
+            window.location.href = `/viewer.html?id=${path}`;
+        }
+      
 
         function toggleTheme() {
             document.body.classList.toggle('dark');
