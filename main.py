@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
-import os
+import os, re
 from pymongo import MongoClient, ASCENDING
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 import pytz
