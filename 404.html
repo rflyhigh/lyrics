@@ -3,7 +3,7 @@
 <head>
     <script>
         const path = window.location.pathname.substring(1);
-        if (path && path.length === 5) {
+        if (path) {
             // Redirect to viewer with document ID
             window.location.href = '/viewer.html?id=' + path;
         } else {
