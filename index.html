@@ -472,11 +472,6 @@
 
         
        
-        const path = window.location.pathname.substring(1);
-        if (path && path !== 'index.html') {
-            window.location.href = `/viewer.html?id=${path}`;
-        }
-      
 
         function toggleTheme() {
             document.body.classList.toggle('dark');
@@ -600,7 +595,6 @@
             `;
             document.body.appendChild(modal);
 
-            // Setup custom URL input handler
             const urlInput = document.querySelector('#customUrl');
             urlInput.addEventListener('input', (e) => {
                 e.target.value = e.target.value.replace(/[^a-zA-Z0-9-]/g, '');
