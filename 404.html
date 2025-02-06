@@ -5,9 +5,7 @@
         document.addEventListener("DOMContentLoaded", function() {
             const path = window.location.pathname.substring(1);
             if (path.length > 3 && /^[a-zA-Z0-9]+$/.test(path)) {
-                // Use the History API to change the URL without reloading
-                history.replaceState(null, '', `/viewer.html?id=${path}`);
-                window.location.href = `/viewer.html?id=${path}`;
+                window.location.href = '/viewer.html?id=' + path;
             } else {
                 window.location.href = '/';
             }
