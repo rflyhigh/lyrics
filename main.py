@@ -71,7 +71,6 @@ def generate_delete_code(length=8):
 
 def keep_alive():
     try:
-        port = os.getenv('PORT', '10000')
         response = requests.get(f"https://ai-lf07.onrender.com/health")
         logger.info(f"Keep-alive ping status: {response.status_code}")
     except Exception as e:
