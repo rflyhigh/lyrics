@@ -70,10 +70,16 @@
             letter-spacing: -0.3px;
         }
 
-        .author {
+        .metadata {
             font-size: 14px;
             opacity: 0.5;
             letter-spacing: 0.2px;
+            display: flex;
+            gap: 15px;
+        }
+
+        .author, .date {
+            display: inline-block;
         }
 
         .content {
@@ -199,7 +205,7 @@
                 font-size: 24px;
             }
 
-            .author {
+            .metadata {
                 font-size: 12px;
             }
 
@@ -218,7 +224,10 @@
     <div class="container">
         <div class="header">
             <h1 class="title"></h1>
-            <div class="author"></div>
+            <div class="metadata">
+                <div class="author"></div>
+                <div class="date"></div>
+            </div>
         </div>
         
         <div class="content"></div>
@@ -230,6 +239,36 @@
 
     <script>
         const API_URL = 'https://ai-lf07.onrender.com';
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            const now = new Date();
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            
+            // Format the date as "1 Jan 24"
+            const formattedDate = `${date.getDate()} ${months[date.getMonth()]} ${String(date.getFullYear()).slice(-2)}`;
+            
+            // Calculate relative time
+            const diffTime = Math.abs(now - date);
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const diffMonths = Math.floor(diffDays / 30);
+            const diffYears = Math.floor(diffDays / 365);
+            
+            let relativeTime = '';
+            if (diffDays < 1) {
+                relativeTime = 'Today';
+            } else if (diffDays === 1) {
+                relativeTime = 'Yesterday';
+            } else if (diffDays < 30) {
+                relativeTime = `${diffDays} days ago`;
+            } else if (diffMonths < 12) {
+                relativeTime = `${diffMonths} month${diffMonths > 1 ? 's' : ''} ago`;
+            } else {
+                relativeTime = `${diffYears} year${diffYears > 1 ? 's' : ''} ago`;
+            }
+            
+            return `${formattedDate} (${relativeTime})`;
+        }
 
         function showToast(message) {
             const toast = document.createElement('div');
@@ -310,6 +349,7 @@
                     document.title = `${doc.title} - TypeIt`;
                     document.querySelector('.title').textContent = doc.title;
                     document.querySelector('.author').textContent = doc.author ? `By ${doc.author}` : '';
+                    document.querySelector('.date').textContent = formatDate(doc.created_at);
 
                     // Update content and styling
                     const content = document.querySelector('.content');
