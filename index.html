@@ -243,6 +243,20 @@
             animation: fadeInOut 3s ease;
         }
 
+        .url-status {
+            font-size: 12px;
+            margin-top: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .url-status.available {
+            color: #4CAF50;
+        }
+
+        .url-status.unavailable {
+            color: #F44336;
+        }
+
         @keyframes fadeInOut {
             0% { opacity: 0; }
             10% { opacity: 1; }
@@ -454,6 +468,15 @@
     <script>
         const API_URL = 'https://ai-lf07.onrender.com';
         let cleanMode = false;
+        let customUrlCheckTimeout;
+
+        // Check if we're on a document path and redirect if necessary
+        (function() {
+            const path = window.location.pathname.substring(1);
+            if (path && path !== 'index.html') {
+                window.location.href = `/viewer.html?id=${path}`;
+            }
+        })();
 
         function toggleTheme() {
             document.body.classList.toggle('dark');
@@ -521,6 +544,29 @@
             URL.revokeObjectURL(url);
         }
 
+        async function checkCustomUrlAvailability(url) {
+            if (!url) {
+                document.querySelector('.url-status').textContent = '';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/check-url/${url}`);
+                const data = await response.json();
+                const statusElement = document.querySelector('.url-status');
+                
+                if (data.available) {
+                    statusElement.textContent = 'URL is available!';
+                    statusElement.className = 'url-status available';
+                } else {
+                    statusElement.textContent = 'URL is already taken';
+                    statusElement.className = 'url-status unavailable';
+                }
+            } catch (error) {
+                console.error('Error checking URL availability:', error);
+            }
+        }
+
         function showToast(message) {
             const toast = document.createElement('div');
             toast.className = 'toast';
@@ -539,6 +585,13 @@
                     <button class="close-button" onclick="closeModal()">&times;</button>
                     <h3>Publish Document</h3>
                     <p>Share your document with others!</p>
+                    <input type="text" 
+                           placeholder="Custom URL (optional)" 
+                           id="customUrl" 
+                           pattern="[a-zA-Z0-9-]+" 
+                           maxlength="50"
+                           onkeyup="handleCustomUrlInput(this.value)">
+                    <div class="url-status"></div>
                     <div class="modal-buttons">
                         <button onclick="publishDocument()">Publish</button>
                         <button onclick="closeModal()">Cancel</button>
@@ -546,12 +599,29 @@
                 </div>
             `;
             document.body.appendChild(modal);
+
+            // Setup custom URL input handler
+            const urlInput = document.querySelector('#customUrl');
+            urlInput.addEventListener('input', (e) => {
+                e.target.value = e.target.value.replace(/[^a-zA-Z0-9-]/g, '');
+            });
+        }
+
+        function handleCustomUrlInput(value) {
+            clearTimeout(customUrlCheckTimeout);
+            customUrlCheckTimeout = setTimeout(() => {
+                if (value.length >= 3) {
+                    checkCustomUrlAvailability(value);
+                } else {
+                    document.querySelector('.url-status').textContent = '';
+                }
+            }, 500);
         }
 
         function closeModal() {
             const modal = document.querySelector('.modal');
             const overlay = document.querySelector('.modal-overlay');
-            if (modal) modal.remove();
+            if (modal) modal.parentElement.remove();
             if (overlay) overlay.remove();
         }
 
@@ -564,7 +634,8 @@
                 textColor: document.querySelector('#textColor').value,
                 textFormat: document.querySelector('#textFormat').value,
                 lineHeight: document.querySelector('#lineHeight').value,
-                theme: document.body.classList.contains('dark') ? 'dark' : 'light'
+                theme: document.body.classList.contains('dark') ? 'dark' : 'light',
+                custom_url: document.querySelector('#customUrl')?.value || null
             };
 
             try {
@@ -595,7 +666,7 @@
                         </div>
                     `;
                 } else {
-                    showToast('Error publishing document');
+                    showToast(data.error || 'Error publishing document');
                 }
             } catch (error) {
                 showToast('Error connecting to server');
