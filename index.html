@@ -201,6 +201,18 @@
             border-radius: 4px;
         }
 
+        .modal p {
+            margin: 10px 0;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .modal .error {
+            color: #FF6B6B;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
         .modal-buttons {
             display: flex;
             gap: 10px;
@@ -531,6 +543,13 @@
             }, 3000);
         }
 
+        function validateCustomUrl(url) {
+            const alphanumericRegex = /^[a-zA-Z0-9]+$/;
+            if (!url) return true; // Empty URL is valid (will generate random ID)
+            if (url.length < 3 || url.length > 50) return false;
+            return alphanumericRegex.test(url);
+        }
+
         function showPublishModal() {
             const modal = document.createElement('div');
             modal.innerHTML = `
@@ -539,6 +558,11 @@
                     <button class="close-button" onclick="closeModal()">&times;</button>
                     <h3>Publish Document</h3>
                     <p>Share your document with others!</p>
+                    <input type="text" 
+                           id="customUrl" 
+                           placeholder="Custom URL (optional, alphanumeric only)"
+                           onkeyup="validateCustomUrlInput(this)">
+                    <div id="urlError" class="error" style="display: none;"></div>
                     <div class="modal-buttons">
                         <button onclick="publishDocument()">Publish</button>
                         <button onclick="closeModal()">Cancel</button>
@@ -546,6 +570,26 @@
                 </div>
             `;
             document.body.appendChild(modal);
+        }
+
+        function validateCustomUrlInput(input) {
+            const errorDiv = document.getElementById('urlError');
+            const publishButton = input.parentElement.querySelector('.modal-buttons button');
+            
+            if (!input.value) {
+                errorDiv.style.display = 'none';
+                publishButton.disabled = false;
+                return;
+            }
+
+            if (!validateCustomUrl(input.value)) {
+                errorDiv.textContent = 'Custom URL must be 3-50 alphanumeric characters';
+                errorDiv.style.display = 'block';
+                publishButton.disabled = true;
+            } else {
+                errorDiv.style.display = 'none';
+                publishButton.disabled = false;
+            }
         }
 
         function closeModal() {
@@ -556,6 +600,8 @@
         }
 
         async function publishDocument() {
+            const customUrl = document.getElementById('customUrl')?.value.trim();
+            
             const documentData = {
                 title: document.querySelector('.title').value,
                 author: document.querySelector('.author').value,
@@ -567,6 +613,10 @@
                 theme: document.body.classList.contains('dark') ? 'dark' : 'light'
             };
 
+            if (customUrl) {
+                documentData.custom_url = customUrl;
+            }
+
             try {
                 const response = await fetch(`${API_URL}/publish`, {
                     method: 'POST',
@@ -577,6 +627,7 @@
                 });
 
                 const data = await response.json();
+                
                 if (data.success) {
                     const shareUrl = `${window.location.origin}/${data.id}`;
                     showToast('Document published successfully!');
@@ -595,7 +646,15 @@
                         </div>
                     `;
                 } else {
-                    showToast('Error publishing document');
+                    const errorMessage = data.error || 'Error publishing document';
+                    showToast(errorMessage);
+                    if (data.error === 'Custom URL is already taken') {
+                        const errorDiv = document.getElementById('urlError');
+                        if (errorDiv) {
+                            errorDiv.textContent = 'This custom URL is already taken';
+                            errorDiv.style.display = 'block';
+                        }
+                    }
                 }
             } catch (error) {
                 showToast('Error connecting to server');
