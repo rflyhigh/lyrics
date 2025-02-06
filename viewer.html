@@ -88,32 +88,21 @@
             font-size: 18px;
             min-height: 70vh;
             letter-spacing: -0.2px;
+            margin-bottom: 30px;
         }
 
-        .bottom-toolbar {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            display: flex;
-            gap: 8px;
-        }
-
-        .bottom-toolbar button {
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(10px);
-            padding: 8px 16px;
-            border-radius: 8px;
+        .delete-link {
+            display: inline-block;
+            margin: 20px 0 40px;
+            color: #ff4444;
+            text-decoration: none;
+            font-size: 14px;
             cursor: pointer;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: #fff;
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: all 0.2s;
+            transition: opacity 0.2s;
         }
 
-        .bottom-toolbar button:hover {
-            background: rgba(255, 255, 255, 0.1);
+        .delete-link:hover {
+            opacity: 0.8;
         }
 
         .modal {
@@ -231,10 +220,8 @@
         </div>
         
         <div class="content"></div>
-
-        <div class="bottom-toolbar">
-            <button onclick="showDeleteModal()">Delete Content</button>
-        </div>
+        
+        <a class="delete-link" onclick="showDeleteModal()">Delete this content</a>
     </div>
 
     <script>
@@ -245,10 +232,8 @@
             const now = new Date();
             const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
             
-            // Format the date as "1 Jan 24"
             const formattedDate = `${months[date.getMonth()]} ${date.getDate()}, ${String(date.getFullYear()).slice(-2)}`;
             
-            // Calculate relative time
             const diffTime = Math.abs(now - date);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             const diffMonths = Math.floor(diffDays / 30);
@@ -345,13 +330,11 @@
                 if (data.success && data.document) {
                     const doc = data.document;
                     
-                    // Update title and metadata
                     document.title = `${doc.title} - TypeIt`;
                     document.querySelector('.title').textContent = doc.title;
                     document.querySelector('.author').textContent = doc.author ? `By ${doc.author}` : '';
                     document.querySelector('.date').textContent = formatDate(doc.created_at);
 
-                    // Update content and styling
                     const content = document.querySelector('.content');
                     content.innerHTML = doc.content;
                     content.style.fontSize = `${doc.fontSize}px`;
@@ -359,7 +342,6 @@
                     content.style.textTransform = doc.textFormat;
                     content.style.lineHeight = doc.lineHeight;
 
-                    // Update theme
                     if (doc.theme === 'light') {
                         document.body.classList.remove('dark');
                         document.body.classList.add('light');
@@ -376,7 +358,6 @@
             }
         }
 
-        // Load document on page load
         window.addEventListener('load', loadDocument);
     </script>
 </body>
