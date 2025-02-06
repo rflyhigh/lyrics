@@ -16,10 +16,8 @@ import pytz
 from waitress import serve
 from apscheduler.schedulers.background import BackgroundScheduler
 
-# Load environment variables
 load_dotenv()
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -29,7 +27,6 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
-# Configure rate limiter
 limiter = Limiter(
     get_remote_address,
     app=app,
@@ -37,7 +34,6 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 
-# MongoDB Connection with retry logic
 def connect_to_mongodb(max_retries=3, retry_delay=5):
     for attempt in range(max_retries):
         try:
@@ -45,7 +41,6 @@ def connect_to_mongodb(max_retries=3, retry_delay=5):
                 os.getenv('MONGODB_URI', 'mongodb://localhost:27017'),
                 serverSelectionTimeoutMS=5000
             )
-            # Test connection
             client.admin.command('ping')
             logger.info("Connected to MongoDB successfully")
             return client
@@ -56,11 +51,9 @@ def connect_to_mongodb(max_retries=3, retry_delay=5):
             logger.warning(f"MongoDB connection attempt {attempt + 1} failed, retrying in {retry_delay} seconds...")
             time.sleep(retry_delay)
 
-# Initialize MongoDB connection
 client = connect_to_mongodb()
 db = client[os.getenv('MONGODB_DB', 'documents_db')]
 
-# Create indexes for better performance
 try:
     db.documents.create_index([("id", ASCENDING)], unique=True)
     db.documents.create_index([("created_at", ASCENDING)])
@@ -76,7 +69,6 @@ def generate_id(length=5):
 def generate_delete_code(length=8):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
-# Enhanced keep-alive mechanism for Render
 def keep_alive():
     try:
         port = os.getenv('PORT', '10000')
