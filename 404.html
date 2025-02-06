@@ -42,26 +42,32 @@
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             const path = window.location.pathname.substring(1);
-
+            
+            // Function to validate path
             function isValidPath(path) {
+                // Check if path is at least 3 characters and contains only alphanumeric characters
                 const alphanumericRegex = /^[a-zA-Z0-9]{3,}$/;
                 return alphanumericRegex.test(path);
             }
 
+            // Function to handle redirect
             function handleRedirect() {
                 try {
                     if (path && isValidPath(path)) {
+                        // Redirect to viewer with document ID
                         window.location.href = '/viewer.html?id=' + encodeURIComponent(path);
                     } else {
+                        // Redirect to editor for invalid paths
                         window.location.href = '/';
                     }
                 } catch (error) {
                     console.error('Redirect error:', error);
+                    // Fallback to home page if there's an error
                     window.location.href = '/';
                 }
             }
 
-    
+            // Add a small delay to show the loading animation
             setTimeout(handleRedirect, 800);
         });
     </script>
