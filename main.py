@@ -8,18 +8,23 @@ import time
 import threading
 import logging
 from datetime import datetime
+import requests
 from dotenv import load_dotenv
 import os
-from pymongo import MongoClient
+from pymongo import MongoClient, ASCENDING
 from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
 import pytz
 from waitress import serve
+from apscheduler.schedulers.background import BackgroundScheduler
 
 # Load environment variables
 load_dotenv()
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -33,38 +38,89 @@ limiter = Limiter(
     storage_uri="memory://"
 )
 
-# MongoDB Connection
-try:
-    client = MongoClient(os.getenv('MONGODB_URI', 'mongodb://localhost:27017'), 
-                        serverSelectionTimeoutMS=5000)
-    client.admin.command('ping')
-    db = client[os.getenv('MONGODB_DB', 'documents_db')]
-    print("Connected to MongoDB successfully")
-except (ConnectionFailure, ServerSelectionTimeoutError) as e:
-    logger.error(f"Failed to connect to MongoDB: {e}")
-    raise
+# MongoDB Connection with retry logic
+def connect_to_mongodb(max_retries=3, retry_delay=5):
+    for attempt in range(max_retries):
+        try:
+            client = MongoClient(
+                os.getenv('MONGODB_URI', 'mongodb://localhost:27017'),
+                serverSelectionTimeoutMS=5000
+            )
+            client.admin.command('ping')
+            logger.info("Connected to MongoDB successfully")
+            return client
+        except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+            if attempt == max_retries - 1:
+                logger.error(f"Failed to connect to MongoDB after {max_retries} attempts: {e}")
+                raise
+            logger.warning(f"MongoDB connection attempt {attempt + 1} failed, retrying in {retry_delay} seconds...")
+            time.sleep(retry_delay)
+
+# Initialize MongoDB connection
+client = connect_to_mongodb()
+db = client[os.getenv('MONGODB_DB', 'documents_db')]
+
+# Create indexes for better performance
+db.documents.create_index([("id", ASCENDING)], unique=True)
+db.documents.create_index([("created_at", ASCENDING)])
 
 def generate_id(length=5):
     while True:
         doc_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
-        # Check if ID already exists
         if not db.documents.find_one({'id': doc_id}):
             return doc_id
 
 def generate_delete_code(length=8):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
-# Keep-alive mechanism
+# Enhanced keep-alive mechanism
 def keep_alive():
-    while True:
-        logger.info("Keep-alive ping")
-        time.sleep(300)
+    app_url = os.getenv('APP_URL')
+    if not app_url:
+        logger.warning("APP_URL not set, skipping keep-alive ping")
+        return
+    
+    try:
+        response = requests.get(f"{app_url}/health")
+        logger.info(f"Keep-alive ping status: {response.status_code}")
+    except Exception as e:
+        logger.error(f"Keep-alive ping failed: {e}")
+
+# Health check endpoint
+@app.route('/health', methods=['GET'])
+def health_check():
+    try:
+        # Check MongoDB connection
+        db.admin.command('ping')
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.now(pytz.UTC).isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return jsonify({
+            'status': 'unhealthy',
+            'error': str(e)
+        }), 500
 
 @app.route('/publish', methods=['POST'])
-@limiter.limit("5 per minute")  # Specific limit for publishing
+@limiter.limit("5 per minute")
 def publish_document():
     try:
+        if not request.is_json:
+            return jsonify({
+                'success': False,
+                'error': 'Content-Type must be application/json'
+            }), 400
+
         data = request.json
+        required_fields = ['title', 'content']
+        if not all(field in data for field in required_fields):
+            return jsonify({
+                'success': False,
+                'error': f'Missing required fields: {", ".join(required_fields)}'
+            }), 400
+
         doc_id = generate_id()
         delete_code = generate_delete_code()
         
@@ -74,11 +130,11 @@ def publish_document():
             'title': data.get('title'),
             'author': data.get('author'),
             'content': data.get('content'),
-            'font_size': data.get('fontSize'),
-            'text_color': data.get('textColor'),
-            'text_format': data.get('textFormat'),
-            'line_height': data.get('lineHeight'),
-            'theme': data.get('theme'),
+            'font_size': data.get('fontSize', '16px'),
+            'text_color': data.get('textColor', '#000000'),
+            'text_format': data.get('textFormat', 'plain'),
+            'line_height': data.get('lineHeight', '1.5'),
+            'theme': data.get('theme', 'light'),
             'created_at': datetime.now(pytz.UTC)
         }
         
@@ -97,7 +153,7 @@ def publish_document():
         }), 500
 
 @app.route('/document/<doc_id>', methods=['GET'])
-@limiter.limit("30 per minute")  # Specific limit for retrieving documents
+@limiter.limit("30 per minute")
 def get_document(doc_id):
     try:
         doc = db.documents.find_one({'id': doc_id})
@@ -113,7 +169,8 @@ def get_document(doc_id):
                     'textColor': doc['text_color'],
                     'textFormat': doc['text_format'],
                     'lineHeight': doc['line_height'],
-                    'theme': doc['theme']
+                    'theme': doc['theme'],
+                    'created_at': doc['created_at'].isoformat()
                 }
             })
         return jsonify({
@@ -128,7 +185,7 @@ def get_document(doc_id):
         }), 500
 
 @app.route('/delete/<doc_id>', methods=['DELETE'])
-@limiter.limit("10 per minute")  # Specific limit for deletions
+@limiter.limit("10 per minute")
 def delete_document(doc_id):
     delete_code = request.args.get('code')
     
@@ -139,21 +196,16 @@ def delete_document(doc_id):
         }), 400
     
     try:
-        doc = db.documents.find_one({'id': doc_id})
+        result = db.documents.delete_one({
+            'id': doc_id,
+            'delete_code': delete_code
+        })
         
-        if not doc:
+        if result.deleted_count == 0:
             return jsonify({
                 'success': False,
-                'error': 'Document not found'
+                'error': 'Document not found or invalid delete code'
             }), 404
-        
-        if doc['delete_code'] != delete_code:
-            return jsonify({
-                'success': False,
-                'error': 'Invalid delete code'
-            }), 403
-        
-        db.documents.delete_one({'id': doc_id})
         
         return jsonify({
             'success': True
@@ -165,6 +217,7 @@ def delete_document(doc_id):
             'error': 'Internal server error'
         }), 500
 
+# Error handlers
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({'error': 'Resource not found'}), 404
@@ -179,8 +232,10 @@ def ratelimit_handler(e):
 
 if __name__ == '__main__':
     try:
-        # Start keep-alive thread
-        threading.Thread(target=keep_alive, daemon=True).start()
+        # Initialize scheduler
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(keep_alive, 'interval', minutes=5)
+        scheduler.start()
         
         # Get port from environment variable or use default
         port = int(os.getenv('PORT', 5000))
@@ -190,3 +245,4 @@ if __name__ == '__main__':
         serve(app, host='0.0.0.0', port=port)
     except Exception as e:
         logger.error(f"Application startup failed: {e}")
+        scheduler.shutdown()
