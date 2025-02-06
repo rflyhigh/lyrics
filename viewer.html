@@ -290,7 +290,8 @@
         }
 
         async function deleteDocument() {
-            const docId = window.location.pathname.substring(1);
+            const urlParams = new URLSearchParams(window.location.search);
+            const docId = urlParams.get('id');
             const deleteCode = document.querySelector('#deleteCode').value;
 
             try {
@@ -314,7 +315,8 @@
         }
 
         async function loadDocument() {
-            const docId = window.location.pathname.substring(1);
+            const urlParams = new URLSearchParams(window.location.search);
+            const docId = urlParams.get('id');
 
             if (!docId) {
                 showToast('No document ID provided');
