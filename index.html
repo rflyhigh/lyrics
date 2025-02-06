@@ -229,44 +229,6 @@
             background: rgba(0, 0, 0, 0.5);
             z-index: 1999;
         }
-        .modal input.custom-url {
-            padding-right: 100px;
-        }
-
-        .url-availability {
-            position: absolute;
-            right: 25px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 12px;
-            padding: 2px 6px;
-            border-radius: 3px;
-        }
-
-        .url-available {
-            color: #4CAF50;
-        }
-
-        .url-unavailable {
-            color: #f44336;
-        }
-
-        .url-input-container {
-            position: relative;
-            margin: 10px 0;
-        }
-
-        .url-input-container span {
-            position: absolute;
-            left: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: rgba(255, 255, 255, 0.5);
-        }
-
-        .url-input-container input {
-            padding-left: 85px;
-        }
 
         .toast {
             position: fixed;
@@ -492,129 +454,6 @@
     <script>
         const API_URL = 'https://ai-lf07.onrender.com';
         let cleanMode = false;
-        let urlCheckTimeout;
-
-        function showPublishModal() {
-            const modal = document.createElement('div');
-            modal.innerHTML = `
-                <div class="modal-overlay"></div>
-                <div class="modal">
-                    <button class="close-button" onclick="closeModal()">&times;</button>
-                    <h3>Publish Document</h3>
-                    <p>Share your document with others!</p>
-                    <div class="url-input-container">
-                        <span>typeit.co/</span>
-                        <input 
-                            type="text" 
-                            class="custom-url" 
-                            placeholder="custom-url (optional)"
-                            onkeyup="checkUrlAvailability(this.value)"
-                            pattern="[a-zA-Z0-9-]+"
-                            maxlength="50">
-                        <div class="url-availability"></div>
-                    </div>
-                    <div class="modal-buttons">
-                        <button onclick="publishDocument()">Publish</button>
-                        <button onclick="closeModal()">Cancel</button>
-                    </div>
-                </div>
-            `;
-            document.body.appendChild(modal);
-        }
-
-        async function checkUrlAvailability(url) {
-            const availabilityDiv = document.querySelector('.url-availability');
-            
-            // Clear previous timeout
-            clearTimeout(urlCheckTimeout);
-            
-            // Clear message if input is empty
-            if (!url) {
-                availabilityDiv.textContent = '';
-                return;
-            }
-
-            // Validate URL format
-            if (!/^[a-zA-Z0-9-]+$/.test(url)) {
-                availabilityDiv.textContent = 'Invalid format';
-                availabilityDiv.className = 'url-availability url-unavailable';
-                return;
-            }
-
-            // Set a timeout to check availability
-            urlCheckTimeout = setTimeout(async () => {
-                try {
-                    const response = await fetch(`${API_URL}/check-url/${url}`);
-                    const data = await response.json();
-                    
-                    if (data.available) {
-                        availabilityDiv.textContent = 'Available';
-                        availabilityDiv.className = 'url-availability url-available';
-                    } else {
-                        availabilityDiv.textContent = 'Unavailable';
-                        availabilityDiv.className = 'url-availability url-unavailable';
-                    }
-                } catch (error) {
-                    availabilityDiv.textContent = 'Error checking';
-                    availabilityDiv.className = 'url-availability url-unavailable';
-                }
-            }, 500); // Wait 500ms after last keypress before checking
-        }
-
-        async function publishDocument() {
-            const customUrl = document.querySelector('.custom-url')?.value;
-            
-            const documentData = {
-                title: document.querySelector('.title').value,
-                author: document.querySelector('.author').value,
-                content: document.querySelector('.content-container').innerHTML,
-                fontSize: document.querySelector('#fontSize').value,
-                textColor: document.querySelector('#textColor').value,
-                textFormat: document.querySelector('#textFormat').value,
-                lineHeight: document.querySelector('#lineHeight').value,
-                theme: document.body.classList.contains('dark') ? 'dark' : 'light'
-            };
-
-            // Add custom URL if provided
-            if (customUrl) {
-                documentData.custom_url = customUrl;
-            }
-
-            try {
-                const response = await fetch(`${API_URL}/publish`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(documentData)
-                });
-
-                const data = await response.json();
-                if (data.success) {
-                    const shareUrl = `${window.location.origin}/${data.id}`;
-                    showToast('Document published successfully!');
-                    
-                    const modal = document.querySelector('.modal');
-                    modal.innerHTML = `
-                        <button class="close-button" onclick="closeModal()">&times;</button>
-                        <h3>Document Published!</h3>
-                        <p>Share this link:</p>
-                        <input type="text" value="${shareUrl}" readonly onclick="this.select()">
-                        <p>Delete Code (save this):</p>
-                        <input type="text" value="${data.delete_code}" readonly onclick="this.select()">
-                        <div class="modal-buttons">
-                            <button onclick="copyToClipboard('${shareUrl}')">Copy Link</button>
-                            <button onclick="closeModal()">Close</button>
-                        </div>
-                    `;
-                } else {
-                    showToast(data.error || 'Error publishing document');
-                }
-            } catch (error) {
-                showToast('Error connecting to server');
-                console.error('Error:', error);
-            }
-        }
 
         function toggleTheme() {
             document.body.classList.toggle('dark');
@@ -692,7 +531,22 @@
             }, 3000);
         }
 
-        
+        function showPublishModal() {
+            const modal = document.createElement('div');
+            modal.innerHTML = `
+                <div class="modal-overlay"></div>
+                <div class="modal">
+                    <button class="close-button" onclick="closeModal()">&times;</button>
+                    <h3>Publish Document</h3>
+                    <p>Share your document with others!</p>
+                    <div class="modal-buttons">
+                        <button onclick="publishDocument()">Publish</button>
+                        <button onclick="closeModal()">Cancel</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
 
         function closeModal() {
             const modal = document.querySelector('.modal');
@@ -701,7 +555,54 @@
             if (overlay) overlay.remove();
         }
 
-        
+        async function publishDocument() {
+            const documentData = {
+                title: document.querySelector('.title').value,
+                author: document.querySelector('.author').value,
+                content: document.querySelector('.content-container').innerHTML,
+                fontSize: document.querySelector('#fontSize').value,
+                textColor: document.querySelector('#textColor').value,
+                textFormat: document.querySelector('#textFormat').value,
+                lineHeight: document.querySelector('#lineHeight').value,
+                theme: document.body.classList.contains('dark') ? 'dark' : 'light'
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/publish`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(documentData)
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    const shareUrl = `${window.location.origin}/${data.id}`;
+                    showToast('Document published successfully!');
+                    
+                    const modal = document.querySelector('.modal');
+                    modal.innerHTML = `
+                        <button class="close-button" onclick="closeModal()">&times;</button>
+                        <h3>Document Published!</h3>
+                        <p>Share this link:</p>
+                        <input type="text" value="${shareUrl}" readonly onclick="this.select()">
+                        <p>Delete Code (save this):</p>
+                        <input type="text" value="${data.delete_code}" readonly onclick="this.select()">
+                        <div class="modal-buttons">
+                            <button onclick="copyToClipboard('${shareUrl}')">Copy Link</button>
+                            <button onclick="closeModal()">Close</button>
+                        </div>
+                    `;
+                } else {
+                    showToast('Error publishing document');
+                }
+            } catch (error) {
+                showToast('Error connecting to server');
+                console.error('Error:', error);
+            }
+        }
+
         async function copyToClipboard(text) {
             try {
                 await navigator.clipboard.writeText(text);
