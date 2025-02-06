@@ -91,6 +91,24 @@ def health_check():
             'error': str(e)
         }), 500
 
+def validate_custom_url(url):
+    """
+    Validates a custom URL against the following rules:
+    - Length between 3 and 50 characters
+    - Only alphanumeric characters allowed
+    - No spaces or special characters
+    """
+    if not 3 <= len(url) <= 50:
+        return False
+    
+    return bool(re.match('^[a-zA-Z0-9]+$', url))
+
+def is_url_available(custom_url):
+    """
+    Checks if a custom URL is available
+    """
+    return not db.documents.find_one({'custom_url': custom_url})
+
 @app.route('/publish', methods=['POST'])
 @limiter.limit("5 per minute")
 def publish_document():
@@ -109,11 +127,32 @@ def publish_document():
                 'error': f'Missing required fields: {", ".join(required_fields)}'
             }), 400
 
-        doc_id = generate_id()
+        # Handle custom URL if provided
+        custom_url = data.get('custom_url')
+        doc_id = None
+        
+        if custom_url:
+            if not validate_custom_url(custom_url):
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid custom URL. Must be 3-50 alphanumeric characters only.'
+                }), 400
+                
+            if not is_url_available(custom_url):
+                return jsonify({
+                    'success': False,
+                    'error': 'Custom URL is already taken'
+                }), 400
+                
+            doc_id = custom_url
+        else:
+            doc_id = generate_id()
+
         delete_code = generate_delete_code()
         
         document = {
             'id': doc_id,
+            'custom_url': custom_url if custom_url else None,
             'delete_code': delete_code,
             'title': data.get('title'),
             'author': data.get('author'),
@@ -144,7 +183,13 @@ def publish_document():
 @limiter.limit("30 per minute")
 def get_document(doc_id):
     try:
-        doc = db.documents.find_one({'id': doc_id})
+        # Check both id and custom_url fields
+        doc = db.documents.find_one({
+            '$or': [
+                {'id': doc_id},
+                {'custom_url': doc_id}
+            ]
+        })
             
         if doc:
             return jsonify({
@@ -171,7 +216,7 @@ def get_document(doc_id):
             'success': False,
             'error': 'Internal server error'
         }), 500
-
+        
 @app.route('/delete/<doc_id>', methods=['DELETE'])
 @limiter.limit("10 per minute")
 def delete_document(doc_id):
