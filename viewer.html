@@ -246,7 +246,7 @@
             const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             
             // Format the date as "1 Jan 24"
-            const formattedDate = `${date.getDate()} ${months[date.getMonth()]} ${String(date.getFullYear()).slice(-2)}`;
+            const formattedDate = `${months[date.getMonth()]} ${date.getDate()}, ${String(date.getFullYear()).slice(-2)}`;
             
             // Calculate relative time
             const diffTime = Math.abs(now - date);
