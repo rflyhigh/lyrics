@@ -6,3 +6,4 @@ pytz==2024.1
 flask-limiter 
 waitress
 apscheduler
+requests
