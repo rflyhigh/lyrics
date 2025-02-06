@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TypeIt - View Document</title>
+    <title>Versz (Viewer)</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cabinet-grotesk/1.0.0/cabinet-grotesk.css" rel="stylesheet">
     <style>
         * {
@@ -206,8 +206,8 @@
 </head>
 <body class="dark">
     <div class="top-header">
-        <a href="https://share.versz.fun/">← Home</a>
-        <a href="https://share.versz.fun/">Create your own</a>
+        <a href="https://versz.fun/">← Home</a>
+        <a href="https://versz.fun/">Create your own</a>
     </div>
 
     <div class="container">
@@ -303,7 +303,7 @@
                 if (data.success) {
                     showToast('Content deleted successfully');
                     setTimeout(() => {
-                        window.location.href = 'https://share.versz.fun/';
+                        window.location.href = 'https://versz.fun/';
                     }, 1500);
                 } else {
                     showToast(data.error || 'Error deleting content');
@@ -349,7 +349,7 @@
                 } else {
                     showToast('Document not found');
                     setTimeout(() => {
-                        window.location.href = 'https://share.versz.fun/';
+                        window.location.href = 'https://versz.fun/';
                     }, 1500);
                 }
             } catch (error) {
