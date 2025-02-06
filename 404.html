@@ -4,17 +4,8 @@
     <script>
         document.addEventListener("DOMContentLoaded", function() {
             const path = window.location.pathname.substring(1);
-            
-            if (path.length > 3 && /^[a-zA-Z0-9-]+$/.test(path)) {
-                // Use History API to modify browser history without page reload
-                window.history.pushState(
-                    { page: 'viewer' }, 
-                    '', 
-                    '/' + path
-                );
-                
-                // Load viewer content via AJAX or iframe
-                window.location.replace('/viewer.html?id=' + path);
+            if (path.length > 3 && /^[a-zA-Z0-9]+$/.test(path)) {
+                window.location.href = '/viewer.html?id=' + path;
             } else {
                 window.location.href = '/';
             }
