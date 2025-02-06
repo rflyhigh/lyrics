@@ -5,7 +5,6 @@ from flask_limiter.util import get_remote_address
 import random
 import string
 import time
-import threading
 import logging
 from datetime import datetime
 import requests
@@ -46,6 +45,7 @@ def connect_to_mongodb(max_retries=3, retry_delay=5):
                 os.getenv('MONGODB_URI', 'mongodb://localhost:27017'),
                 serverSelectionTimeoutMS=5000
             )
+            # Test connection
             client.admin.command('ping')
             logger.info("Connected to MongoDB successfully")
             return client
@@ -61,8 +61,11 @@ client = connect_to_mongodb()
 db = client[os.getenv('MONGODB_DB', 'documents_db')]
 
 # Create indexes for better performance
-db.documents.create_index([("id", ASCENDING)], unique=True)
-db.documents.create_index([("created_at", ASCENDING)])
+try:
+    db.documents.create_index([("id", ASCENDING)], unique=True)
+    db.documents.create_index([("created_at", ASCENDING)])
+except Exception as e:
+    logger.error(f"Failed to create indexes: {e}")
 
 def generate_id(length=5):
     while True:
@@ -73,25 +76,19 @@ def generate_id(length=5):
 def generate_delete_code(length=8):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
-# Enhanced keep-alive mechanism
+# Enhanced keep-alive mechanism for Render
 def keep_alive():
-    app_url = os.getenv('APP_URL')
-    if not app_url:
-        logger.warning("APP_URL not set, skipping keep-alive ping")
-        return
-    
     try:
-        response = requests.get(f"{app_url}/health")
+        port = os.getenv('PORT', '10000')
+        response = requests.get(f"https://ai-lf07.onrender.com/health")
         logger.info(f"Keep-alive ping status: {response.status_code}")
     except Exception as e:
         logger.error(f"Keep-alive ping failed: {e}")
 
-# Health check endpoint
 @app.route('/health', methods=['GET'])
 def health_check():
     try:
-        # Check MongoDB connection
-        db.admin.command('ping')
+        client.admin.command('ping')
         return jsonify({
             'status': 'healthy',
             'timestamp': datetime.now(pytz.UTC).isoformat()
@@ -232,17 +229,15 @@ def ratelimit_handler(e):
 
 if __name__ == '__main__':
     try:
-        # Initialize scheduler
-        scheduler = BackgroundScheduler()
-        scheduler.add_job(keep_alive, 'interval', minutes=5)
+        scheduler = BackgroundScheduler(timezone=pytz.UTC)
+        scheduler.add_job(keep_alive, 'interval', minutes=2)
         scheduler.start()
+
+        port = int(os.getenv('PORT', 10000))
         
-        # Get port from environment variable or use default
-        port = int(os.getenv('PORT', 5000))
-        
-        # Use Waitress instead of Flask's development server
         logger.info(f"Starting production server on port {port}")
         serve(app, host='0.0.0.0', port=port)
     except Exception as e:
         logger.error(f"Application startup failed: {e}")
-        scheduler.shutdown()
+        if 'scheduler' in locals():
+            scheduler.shutdown()
