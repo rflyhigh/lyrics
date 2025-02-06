@@ -1,45 +1,19 @@
+<!DOCTYPE html>
 <html>
 <head>
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f4f4f4;
-            font-family: Arial, sans-serif;
-        }
-        .loader {
-            border: 8px solid #f3f3f3;
-            border-top: 8px solid #3498db;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
+        document.addEventListener("DOMContentLoaded", function () {
             const path = window.location.pathname.substring(1);
-            
-            if (/^[a-zA-Z0-9]{4,}$/.test(path)) {
-                setTimeout(() => {
-                    window.location.href = '/viewer.html?id=' + path;
-                }, 2000);
+
+            if (path.length > 3 && /^[a-zA-Z0-9]+$/.test(path)) {
+                window.location.href = '/viewer.html?id=' + path;
             } else {
-                setTimeout(() => {
-                    window.location.href = '/';
-                }, 2000);
+                window.location.href = '/';
             }
         });
     </script>
 </head>
 <body>
-    <div class="loader"></div>
+    Redirecting...
 </body>
 </html>
