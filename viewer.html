@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <style>
         * {
             margin: 0;
@@ -18,7 +19,7 @@
 
         body {
             min-height: 100vh;
-            font-family: 'Cabinet Grotesk', sans-serif;
+            font-family: 'Inter', sans-serif;
             transition: all 0.3s ease;
         }
 
@@ -40,6 +41,9 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
 
         .top-header a {
@@ -317,6 +321,16 @@
             animation: fadeInOut 3s ease;
         }
 
+        .error-container {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .error-container h2 {
+            color: #ff4444;
+            margin-bottom: 15px;
+        }
+
         @keyframes fadeInOut {
             0% { opacity: 0; }
             10% { opacity: 1; }
@@ -341,6 +355,28 @@
                 font-size: 16px;
             }
         }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px;
+        }
+
+        .loading::after {
+            content: '';
+            width: 30px;
+            height: 30px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="dark">
@@ -350,17 +386,24 @@
     </div>
 
     <div class="container">
-        <div class="header">
-            <h1 class="title"></h1>
-            <div class="metadata">
-                <div class="author"></div>
-                <div class="date"></div>
+        <div id="loading" class="loading"></div>
+        <div id="content-container" style="display: none;">
+            <div class="header">
+                <h1 class="title"></h1>
+                <div class="metadata">
+                    <div class="author"></div>
+                    <div class="date"></div>
+                </div>
             </div>
+            
+            <div class="content"></div>
+            
+            <a class="delete-link" onclick="showDeleteModal()">Delete this content</a>
         </div>
-        
-        <div class="content"></div>
-        
-        <a class="delete-link" onclick="showDeleteModal()">Delete this content</a>
+        <div id="error-container" class="error-container" style="display: none;">
+            <h2>Error</h2>
+            <p id="error-message"></p>
+        </div>
     </div>
 
     <script>
@@ -376,6 +419,25 @@
                 return code;
             }
         });
+
+        function showLoading() {
+            document.getElementById('loading').style.display = 'flex';
+            document.getElementById('content-container').style.display = 'none';
+            document.getElementById('error-container').style.display = 'none';
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        function showContent() {
+            document.getElementById('content-container').style.display = 'block';
+        }
+
+        function showError(message) {
+            document.getElementById('error-container').style.display = 'block';
+            document.getElementById('error-message').textContent = message;
+        }
 
         function formatDate(dateString) {
             const date = new Date(dateString);
@@ -441,7 +503,7 @@
             toast.textContent = message;
             document.body.appendChild(toast);
             setTimeout(() => {
-                document.body.removeChild(toast);
+                toast.remove();
             }, 3000);
         }
 
@@ -469,28 +531,57 @@
             document.body.appendChild(modal);
         }
 
+        async function fetchWithRetry(url, options = {}, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        ...options,
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                            ...options.headers
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    return await response.json();
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+                }
+            }
+        }
+
         async function deleteDocument() {
             const urlParams = new URLSearchParams(window.location.search);
             const docId = urlParams.get('id');
             const deleteCode = document.querySelector('#deleteCode').value;
 
+            if (!deleteCode) {
+                showToast('Please enter the delete code');
+                return;
+            }
+
             try {
-                const response = await fetch(`${API_URL}/delete/${docId}?code=${deleteCode}`, {
+                const data = await fetchWithRetry(`${API_URL}/delete/${docId}?code=${deleteCode}`, {
                     method: 'DELETE'
                 });
 
-                const data = await response.json();
                 if (data.success) {
                     showToast('Content deleted successfully');
                     setTimeout(() => {
                         window.location.href = 'https://versz.fun/';
                     }, 1500);
                 } else {
-                    showToast(data.error || 'Error deleting content');
+                    throw new Error(data.error || 'Invalid delete code');
                 }
             } catch (error) {
-                showToast('Error connecting to server');
-                console.error('Error:', error);
+                showToast(error.message || 'Error deleting content');
+            } finally {
+                closeModal();
             }
         }
 
@@ -499,28 +590,29 @@
             const docId = urlParams.get('id');
 
             if (!docId) {
-                showToast('No document ID provided');
+                showError('No document ID provided');
+                hideLoading();
                 return;
             }
 
             try {
-                const response = await fetch(`${API_URL}/document/${docId}`);
-                const data = await response.json();
+                showLoading();
+                const data = await fetchWithRetry(`${API_URL}/document/${docId}`);
 
                 if (data.success && data.document) {
                     const doc = data.document;
                     
-                    document.title = `${doc.title} - TypeIt`;
+                    document.title = `${doc.title} - Versz`;
                     document.querySelector('.title').textContent = doc.title;
                     document.querySelector('.author').textContent = doc.author ? `By ${doc.author}` : '';
                     document.querySelector('.date').textContent = formatDate(doc.created_at);
 
                     const content = document.querySelector('.content');
                     content.innerHTML = processContent(doc.content);
-                    content.style.fontSize = `${doc.fontSize}px`;
-                    content.style.color = doc.textColor;
-                    content.style.textTransform = doc.textFormat;
-                    content.style.lineHeight = doc.lineHeight;
+                    content.style.fontSize = `${doc.fontSize || 18}px`;
+                    content.style.color = doc.textColor || 'inherit';
+                    content.style.textTransform = doc.textFormat || 'none';
+                    content.style.lineHeight = doc.lineHeight || '1.8';
 
                     if (doc.theme === 'light') {
                         document.body.classList.remove('dark');
@@ -528,21 +620,29 @@
                         content.classList.add('light');
                     }
 
-                    // Initialize syntax highlighting
                     document.querySelectorAll('pre code').forEach((block) => {
                         hljs.highlightBlock(block);
                     });
+
+                    hideLoading();
+                    showContent();
                 } else {
-                    showToast('Document not found');
-                    setTimeout(() => {
-                        window.location.href = 'https://versz.fun/';
-                    }, 1500);
+                    throw new Error('Document not found');
                 }
             } catch (error) {
-                showToast('Error loading document');
+                hideLoading();
+                showError(error.message || 'Error loading document');
                 console.error('Error:', error);
             }
         }
+
+        // Handle favicon 404
+        window.addEventListener('error', function(e) {
+            if (e.target.tagName === 'LINK' && e.target.rel === 'icon') {
+                const favicon = document.querySelector("link[rel*='icon']");
+                favicon.href = 'data:image/x-icon;base64,AABAAEAAAAAAAEAIAD4AQAAFgAAAIlQTkcNChoKAAAADUlIRFIAAAAQAAAAEAgGAAAAH/P/YQAAAAFzUkdCAK7OHOkAAAAEZ0FNQQAAsY8L/GEFAAAACXBIWXMAAA7DAAAOwwHHb6hkAAABIElEQVQ4T2NgGPKgoaGBGwgvA/FXIP4PxK+A+BQQV0dHR7NDxUFm2wDxYSD+hQX/BOJjQOwExeehkjjBXiB+jEPzv0D8EYiPArEVVA0IlAPxHxyafwPxKSC2h6oBAQMg/gDE/6BqfgHxRSB2hKoBASkg/gTEf4H4FxDfBWI3qBoQsATiT0D8G4ifALElVA0I2APxZyD+A8QPgNgcqgYE3IH4KxD/A+K7QGwEVQMCvkD8DYj/A/FtINaHqgEBfyD+DsT/gfgWEGtD1YBAAhD/AOIMqBoQSIZawgEVA4FUIP4JxBlQMRDIBuJfQJwKFQOBPCD+DcTJUDEQKARakgQVAzmjGIj/AHE8VAwUkTFQMRBYBsQg7/4E4pdAfAKIKwdbxAIAXBF1scYew1QAAAAASUVORK5CYII=';
+            }
+        }, true);
 
         window.addEventListener('load', loadDocument);
     </script>
