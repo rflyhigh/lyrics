@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Versz (Viewer)</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cabinet-grotesk/1.0.0/cabinet-grotesk.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -78,10 +81,6 @@
             gap: 15px;
         }
 
-        .author, .date {
-            display: inline-block;
-        }
-
         .content {
             white-space: pre-wrap;
             line-height: 1.8;
@@ -89,6 +88,109 @@
             min-height: 70vh;
             letter-spacing: -0.2px;
             margin-bottom: 30px;
+        }
+
+        /* Markdown Enhancements */
+        .content a {
+            color: #3498db;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+
+        .content a:hover {
+            opacity: 0.8;
+            text-decoration: underline;
+        }
+
+        .content img {
+            max-width: 150px;
+            height: auto;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            border-radius: 4px;
+            margin: 10px 0;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        .content img.expanded {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            max-width: 90vw;
+            max-height: 90vh;
+            z-index: 1000;
+        }
+
+        .image-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 999;
+            display: none;
+            cursor: pointer;
+        }
+
+        .content ul, .content ol {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+
+        .content li {
+            margin: 8px 0;
+        }
+
+        .content blockquote {
+            border-left: 4px solid #3498db;
+            padding: 10px 20px;
+            margin: 15px 0;
+            background: rgba(52, 152, 219, 0.1);
+        }
+
+        .content pre {
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+
+        .content code {
+            font-family: monospace;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 4px;
+            border-radius: 3px;
+        }
+
+        .content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        .content th, .content td {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 8px;
+            text-align: left;
+        }
+
+        .content th {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .content hr {
+            border: none;
+            border-top: 2px solid rgba(255, 255, 255, 0.1);
+            margin: 20px 0;
+        }
+
+        .content h1, .content h2, .content h3, .content h4, .content h5, .content h6 {
+            margin: 20px 0 10px;
+            line-height: 1.4;
         }
 
         .delete-link {
@@ -224,8 +326,22 @@
         <a class="delete-link" onclick="showDeleteModal()">Delete this content</a>
     </div>
 
+    <div class="image-overlay"></div>
+
     <script>
         const API_URL = 'https://ai-lf07.onrender.com';
+
+        // Configure marked.js
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            highlight: function(code, lang) {
+                if (lang && hljs.getLanguage(lang)) {
+                    return hljs.highlight(code, { language: lang }).value;
+                }
+                return code;
+            }
+        });
 
         function formatDate(dateString) {
             const date = new Date(dateString);
@@ -289,6 +405,26 @@
             document.body.appendChild(modal);
         }
 
+        function setupImageExpansion() {
+            const images = document.querySelectorAll('.content img');
+            const overlay = document.querySelector('.image-overlay');
+
+            images.forEach(img => {
+                img.addEventListener('click', function() {
+                    this.classList.toggle('expanded');
+                    overlay.style.display = this.classList.contains('expanded') ? 'block' : 'none';
+                });
+            });
+
+            overlay.addEventListener('click', function() {
+                const expandedImage = document.querySelector('.content img.expanded');
+                if (expandedImage) {
+                    expandedImage.classList.remove('expanded');
+                }
+                this.style.display = 'none';
+            });
+        }
+
         async function deleteDocument() {
             const urlParams = new URLSearchParams(window.location.search);
             const docId = urlParams.get('id');
@@ -330,13 +466,14 @@
                 if (data.success && data.document) {
                     const doc = data.document;
                     
-                    document.title = `${doc.title} - TypeIt`;
+                    document.title = `${doc.title} - Versz`;
                     document.querySelector('.title').textContent = doc.title;
                     document.querySelector('.author').textContent = doc.author ? `By ${doc.author}` : '';
                     document.querySelector('.date').textContent = formatDate(doc.created_at);
 
                     const content = document.querySelector('.content');
-                    content.innerHTML = doc.content;
+                    // Parse markdown content
+                    content.innerHTML = marked.parse(doc.content);
                     content.style.fontSize = `${doc.fontSize}px`;
                     content.style.color = doc.textColor;
                     content.style.textTransform = doc.textFormat;
@@ -346,6 +483,23 @@
                         document.body.classList.remove('dark');
                         document.body.classList.add('light');
                     }
+
+                    // Initialize syntax highlighting for code blocks
+                    document.querySelectorAll('pre code').forEach((block) => {
+                        hljs.highlightBlock(block);
+                    });
+
+                    // Setup image expansion functionality
+                    setupImageExpansion();
+
+                    // Make external links open in new tab
+                    document.querySelectorAll('.content a').forEach(link => {
+                        if (link.hostname !== window.location.hostname) {
+                            link.target = '_blank';
+                            link.rel = 'noopener noreferrer';
+                        }
+                    });
+
                 } else {
                     showToast('Document not found');
                     setTimeout(() => {
