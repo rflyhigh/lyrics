@@ -6,8 +6,8 @@
     <title>Versz (Viewer)</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cabinet-grotesk/1.0.0/cabinet-grotesk.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prismjs/1.29.0/prism.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prismjs/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -40,6 +40,9 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
         .top-header a {
@@ -81,8 +84,11 @@
             gap: 15px;
         }
 
+        .author, .date {
+            display: inline-block;
+        }
+
         .content {
-            white-space: pre-wrap;
             line-height: 1.8;
             font-size: 18px;
             min-height: 70vh;
@@ -90,27 +96,32 @@
             margin-bottom: 30px;
         }
 
-        /* Markdown Enhancements */
+        /* Markdown Styles */
         .content a {
             color: #3498db;
             text-decoration: none;
             transition: opacity 0.2s;
+            border-bottom: 1px solid transparent;
         }
 
         .content a:hover {
             opacity: 0.8;
-            text-decoration: underline;
+            border-bottom-color: #3498db;
         }
 
         .content img {
             max-width: 150px;
             height: auto;
             cursor: pointer;
-            transition: transform 0.3s ease;
-            border-radius: 4px;
-            margin: 10px 0;
-            display: inline-block;
+            transition: all 0.3s ease;
             vertical-align: middle;
+            margin: 5px;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .content img:hover {
+            transform: scale(1.05);
         }
 
         .content img.expanded {
@@ -121,6 +132,106 @@
             max-width: 90vw;
             max-height: 90vh;
             z-index: 1000;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+        }
+
+        .content h1, .content h2, .content h3, .content h4, .content h5, .content h6 {
+            margin: 1.5em 0 0.5em;
+            line-height: 1.3;
+        }
+
+        .content h1 { font-size: 2em; }
+        .content h2 { font-size: 1.75em; }
+        .content h3 { font-size: 1.5em; }
+        .content h4 { font-size: 1.25em; }
+        .content h5 { font-size: 1.1em; }
+        .content h6 { font-size: 1em; }
+
+        .content ul, .content ol {
+            margin: 1em 0;
+            padding-left: 2em;
+        }
+
+        .content ul li, .content ol li {
+            margin-bottom: 0.5em;
+        }
+
+        .content blockquote {
+            border-left: 4px solid #3498db;
+            padding: 0.5em 1em;
+            margin: 1em 0;
+            background: rgba(52, 152, 219, 0.1);
+            border-radius: 0 4px 4px 0;
+        }
+
+        .content code {
+            background: rgba(52, 152, 219, 0.1);
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .content pre {
+            background: #1a1a1a;
+            padding: 1em;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 1em 0;
+        }
+
+        .content pre code {
+            background: transparent;
+            padding: 0;
+            border-radius: 0;
+            color: #fff;
+        }
+
+        .content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+            background: rgba(52, 152, 219, 0.05);
+            border-radius: 4px;
+        }
+
+        .content th, .content td {
+            border: 1px solid rgba(52, 152, 219, 0.2);
+            padding: 0.75em;
+            text-align: left;
+        }
+
+        .content th {
+            background: rgba(52, 152, 219, 0.1);
+            font-weight: 600;
+        }
+
+        .content tr:nth-child(even) {
+            background: rgba(52, 152, 219, 0.03);
+        }
+
+        .content hr {
+            border: none;
+            border-top: 2px solid rgba(52, 152, 219, 0.2);
+            margin: 2em 0;
+        }
+
+        .content details {
+            margin: 1em 0;
+            padding: 0.5em 1em;
+            background: rgba(52, 152, 219, 0.05);
+            border-radius: 4px;
+        }
+
+        .content summary {
+            cursor: pointer;
+            font-weight: 500;
+            margin: -0.5em -1em;
+            padding: 0.5em 1em;
+        }
+
+        .content details[open] summary {
+            margin-bottom: 0.5em;
         }
 
         .image-overlay {
@@ -132,65 +243,7 @@
             background: rgba(0, 0, 0, 0.9);
             z-index: 999;
             display: none;
-            cursor: pointer;
-        }
-
-        .content ul, .content ol {
-            margin: 15px 0;
-            padding-left: 25px;
-        }
-
-        .content li {
-            margin: 8px 0;
-        }
-
-        .content blockquote {
-            border-left: 4px solid #3498db;
-            padding: 10px 20px;
-            margin: 15px 0;
-            background: rgba(52, 152, 219, 0.1);
-        }
-
-        .content pre {
-            background: #1e1e1e;
-            padding: 15px;
-            border-radius: 4px;
-            overflow-x: auto;
-            margin: 15px 0;
-        }
-
-        .content code {
-            font-family: monospace;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 2px 4px;
-            border-radius: 3px;
-        }
-
-        .content table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 15px 0;
-        }
-
-        .content th, .content td {
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 8px;
-            text-align: left;
-        }
-
-        .content th {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        .content hr {
-            border: none;
-            border-top: 2px solid rgba(255, 255, 255, 0.1);
-            margin: 20px 0;
-        }
-
-        .content h1, .content h2, .content h3, .content h4, .content h5, .content h6 {
-            margin: 20px 0 10px;
-            line-height: 1.4;
+            cursor: zoom-out;
         }
 
         .delete-link {
@@ -287,6 +340,22 @@
             100% { opacity: 0; }
         }
 
+        /* Task Lists */
+        .content ul.contains-task-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .content .task-list-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5em;
+        }
+
+        .content .task-list-item input[type="checkbox"] {
+            margin: 0;
+        }
+
         @media (max-width: 768px) {
             .container {
                 padding: 10px;
@@ -302,6 +371,10 @@
 
             .content {
                 font-size: 16px;
+            }
+
+            .content img:not(.expanded) {
+                max-width: 100px;
             }
         }
     </style>
@@ -331,15 +404,54 @@
     <script>
         const API_URL = 'https://ai-lf07.onrender.com';
 
-        // Configure marked.js
+        // Configure marked options
         marked.setOptions({
             breaks: true,
             gfm: true,
+            headerIds: true,
+            sanitize: false,
             highlight: function(code, lang) {
-                if (lang && hljs.getLanguage(lang)) {
-                    return hljs.highlight(code, { language: lang }).value;
+                if (Prism.languages[lang]) {
+                    return Prism.highlight(code, Prism.languages[lang], lang);
                 }
                 return code;
+            }
+        });
+
+        // Custom renderer for marked
+        const renderer = new marked.Renderer();
+        
+        // Custom image rendering
+        renderer.image = function(href, title, text) {
+            return `<img src="${href}" alt="${text}" title="${title || ''}" onclick="expandImage(this)">`;
+        };
+
+        // Custom checkbox rendering
+        renderer.checkbox = function(checked) {
+            return `<input type="checkbox" ${checked ? 'checked' : ''} disabled>`;
+        };
+
+        // Set the custom renderer
+        marked.use({ renderer });
+
+        function expandImage(img) {
+            const overlay = document.querySelector('.image-overlay');
+            
+            if (img.classList.contains('expanded')) {
+                img.classList.remove('expanded');
+                overlay.style.display = 'none';
+            } else {
+                img.classList.add('expanded');
+                overlay.style.display = 'block';
+            }
+        }
+
+        // Close expanded image when clicking overlay
+        document.querySelector('.image-overlay').addEventListener('click', function() {
+            const expandedImg = document.querySelector('img.expanded');
+            if (expandedImg) {
+                expandedImg.classList.remove('expanded');
+                this.style.display = 'none';
             }
         });
 
@@ -405,26 +517,6 @@
             document.body.appendChild(modal);
         }
 
-        function setupImageExpansion() {
-            const images = document.querySelectorAll('.content img');
-            const overlay = document.querySelector('.image-overlay');
-
-            images.forEach(img => {
-                img.addEventListener('click', function() {
-                    this.classList.toggle('expanded');
-                    overlay.style.display = this.classList.contains('expanded') ? 'block' : 'none';
-                });
-            });
-
-            overlay.addEventListener('click', function() {
-                const expandedImage = document.querySelector('.content img.expanded');
-                if (expandedImage) {
-                    expandedImage.classList.remove('expanded');
-                }
-                this.style.display = 'none';
-            });
-        }
-
         async function deleteDocument() {
             const urlParams = new URLSearchParams(window.location.search);
             const docId = urlParams.get('id');
@@ -466,14 +558,14 @@
                 if (data.success && data.document) {
                     const doc = data.document;
                     
-                    document.title = `${doc.title} - Versz`;
+                    document.title = `${doc.title} - TypeIt`;
                     document.querySelector('.title').textContent = doc.title;
                     document.querySelector('.author').textContent = doc.author ? `By ${doc.author}` : '';
                     document.querySelector('.date').textContent = formatDate(doc.created_at);
 
                     const content = document.querySelector('.content');
-                    // Parse markdown content
-                    content.innerHTML = marked.parse(doc.content);
+                    // Convert Markdown to HTML using marked
+                    content.innerHTML = marked(doc.content);
                     content.style.fontSize = `${doc.fontSize}px`;
                     content.style.color = doc.textColor;
                     content.style.textTransform = doc.textFormat;
@@ -484,22 +576,8 @@
                         document.body.classList.add('light');
                     }
 
-                    // Initialize syntax highlighting for code blocks
-                    document.querySelectorAll('pre code').forEach((block) => {
-                        hljs.highlightBlock(block);
-                    });
-
-                    // Setup image expansion functionality
-                    setupImageExpansion();
-
-                    // Make external links open in new tab
-                    document.querySelectorAll('.content a').forEach(link => {
-                        if (link.hostname !== window.location.hostname) {
-                            link.target = '_blank';
-                            link.rel = 'noopener noreferrer';
-                        }
-                    });
-
+                    // Initialize syntax highlighting
+                    Prism.highlightAll();
                 } else {
                     showToast('Document not found');
                     setTimeout(() => {
