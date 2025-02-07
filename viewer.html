@@ -5,9 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Versz (Viewer)</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/cabinet-grotesk/1.0.0/cabinet-grotesk.css" rel="stylesheet">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/github-dark.min.css" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -40,9 +37,6 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
         }
 
         .top-header a {
@@ -84,6 +78,10 @@
             gap: 15px;
         }
 
+        .author, .date {
+            display: inline-block;
+        }
+
         .content {
             white-space: pre-wrap;
             line-height: 1.8;
@@ -91,141 +89,6 @@
             min-height: 70vh;
             letter-spacing: -0.2px;
             margin-bottom: 30px;
-        }
-
-        /* Enhanced Markdown Styles */
-        .content h1, .content h2, .content h3, .content h4, .content h5, .content h6 {
-            margin-top: 1.5em;
-            margin-bottom: 0.75em;
-            line-height: 1.2;
-            font-weight: 600;
-        }
-
-        .content h1 { font-size: 2em; }
-        .content h2 { font-size: 1.75em; }
-        .content h3 { font-size: 1.5em; }
-        .content h4 { font-size: 1.25em; }
-        .content h5 { font-size: 1.1em; }
-        .content h6 { font-size: 1em; }
-
-        .content p {
-            margin: 1em 0;
-            line-height: 1.8;
-        }
-
-        .content a {
-            color: #3498db;
-            text-decoration: none;
-            transition: opacity 0.2s;
-        }
-
-        .content a:hover {
-            opacity: 0.8;
-            text-decoration: underline;
-        }
-
-        .content strong {
-            font-weight: 600;
-        }
-
-        .content em {
-            font-style: italic;
-        }
-
-        .content del {
-            text-decoration: line-through;
-        }
-
-        .content blockquote {
-            border-left: 4px solid #3498db;
-            padding: 0.5em 1em;
-            margin: 1em 0;
-            background: rgba(52, 152, 219, 0.1);
-            color: inherit;
-        }
-
-        .content ul, .content ol {
-            margin: 1em 0;
-            padding-left: 2em;
-        }
-
-        .content li {
-            margin: 0.5em 0;
-        }
-
-        .content li > ul, .content li > ol {
-            margin: 0.25em 0;
-        }
-
-        .content code:not(pre code) {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 0.2em 0.4em;
-            border-radius: 3px;
-            font-family: monospace;
-            font-size: 0.9em;
-        }
-
-        .content pre {
-            background: #1e1e1e;
-            padding: 1em;
-            border-radius: 4px;
-            overflow-x: auto;
-            margin: 1em 0;
-        }
-
-        .content pre code {
-            background: transparent;
-            padding: 0;
-            font-family: monospace;
-            font-size: 0.9em;
-            color: #fff;
-        }
-
-        .content img {
-            max-height: 1.5em;
-            width: auto;
-            vertical-align: middle;
-            display: inline-block;
-            margin: 0 0.2em;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border-radius: 3px;
-        }
-
-        .content img.expanded {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            max-width: 90vw;
-            max-height: 90vh;
-            margin: 0;
-            z-index: 1000;
-        }
-
-        .content table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 1em 0;
-            display: block;
-            overflow-x: auto;
-        }
-
-        .content th, .content td {
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            padding: 0.5em;
-            text-align: left;
-        }
-
-        .content th {
-            background: rgba(255, 255, 255, 0.1);
-            font-weight: 600;
-        }
-
-        .content hr {
-            border: none;
-            border-top: 2px solid rgba(255, 255, 255, 0.1);
-            margin: 2em 0;
         }
 
         .delete-link {
@@ -302,18 +165,6 @@
             z-index: 1999;
         }
 
-        .image-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 999;
-            display: none;
-            cursor: pointer;
-        }
-
         .toast {
             position: fixed;
             bottom: 20px;
@@ -373,25 +224,8 @@
         <a class="delete-link" onclick="showDeleteModal()">Delete this content</a>
     </div>
 
-    <div class="image-overlay"></div>
-
     <script>
         const API_URL = 'https://ai-lf07.onrender.com';
-
-        marked.setOptions({
-            breaks: true,
-            gfm: true,
-            pedantic: false,
-            smartLists: true,
-            smartypants: true,
-            xhtml: true,
-            highlight: function(code, lang) {
-                if (lang && hljs.getLanguage(lang)) {
-                    return hljs.highlight(code, { language: lang }).value;
-                }
-                return hljs.highlightAuto(code).value;
-            }
-        });
 
         function formatDate(dateString) {
             const date = new Date(dateString);
@@ -455,30 +289,11 @@
             document.body.appendChild(modal);
         }
 
-        function setupImageExpansion() {
-            const images = document.querySelectorAll('.content img');
-            const overlay = document.querySelector('.image-overlay');
-
-            images.forEach(img => {
-                img.addEventListener('click', function() {
-                    this.classList.toggle('expanded');
-                    overlay.style.display = this.classList.contains('expanded') ? 'block' : 'none';
-                });
-            });
-
-            overlay.addEventListener('click', function() {
-                const expandedImage = document.querySelector('.content img.expanded');
-                if (expandedImage) {
-                    expandedImage.classList.remove('expanded');
-                }
-                this.style.display = 'none';
-            });
-        }
-
         async function deleteDocument() {
             const urlParams = new URLSearchParams(window.location.search);
             const docId = urlParams.get('id');
             const deleteCode = document.querySelector('#deleteCode').value;
+
             try {
                 const response = await fetch(`${API_URL}/delete/${docId}?code=${deleteCode}`, {
                     method: 'DELETE'
@@ -515,14 +330,13 @@
                 if (data.success && data.document) {
                     const doc = data.document;
                     
-                    document.title = `${doc.title} - Versz`;
+                    document.title = `${doc.title} - TypeIt`;
                     document.querySelector('.title').textContent = doc.title;
                     document.querySelector('.author').textContent = doc.author ? `By ${doc.author}` : '';
                     document.querySelector('.date').textContent = formatDate(doc.created_at);
 
                     const content = document.querySelector('.content');
-                    // Parse markdown content
-                    content.innerHTML = marked.parse(doc.content);
+                    content.innerHTML = doc.content;
                     content.style.fontSize = `${doc.fontSize}px`;
                     content.style.color = doc.textColor;
                     content.style.textTransform = doc.textFormat;
@@ -532,23 +346,6 @@
                         document.body.classList.remove('dark');
                         document.body.classList.add('light');
                     }
-
-                    // Initialize syntax highlighting for code blocks
-                    document.querySelectorAll('pre code').forEach((block) => {
-                        hljs.highlightBlock(block);
-                    });
-
-                    // Setup image expansion functionality
-                    setupImageExpansion();
-
-                    // Make external links open in new tab
-                    document.querySelectorAll('.content a').forEach(link => {
-                        if (link.hostname !== window.location.hostname) {
-                            link.target = '_blank';
-                            link.rel = 'noopener noreferrer';
-                        }
-                    });
-
                 } else {
                     showToast('Document not found');
                     setTimeout(() => {
