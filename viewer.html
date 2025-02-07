@@ -40,6 +40,9 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
 
         .top-header a {
@@ -81,19 +84,6 @@
             gap: 15px;
         }
 
-        
-        .image-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.9);
-            z-index: 999;
-            display: none;
-            cursor: pointer;
-        }
-
         .content {
             white-space: pre-wrap;
             line-height: 1.8;
@@ -104,16 +94,34 @@
         }
 
         /* Enhanced Markdown Styles */
-        .content h1 { font-size: 2em; margin: 1em 0 0.5em; }
-        .content h2 { font-size: 1.75em; margin: 0.83em 0; }
-        .content h3 { font-size: 1.5em; margin: 1em 0; }
-        .content h4 { font-size: 1.25em; margin: 1.33em 0; }
-        .content h5 { font-size: 1.1em; margin: 1.67em 0; }
-        .content h6 { font-size: 1em; margin: 2.33em 0; }
+        .content h1, .content h2, .content h3, .content h4, .content h5, .content h6 {
+            margin-top: 1.5em;
+            margin-bottom: 0.75em;
+            line-height: 1.2;
+            font-weight: 600;
+        }
+
+        .content h1 { font-size: 2em; }
+        .content h2 { font-size: 1.75em; }
+        .content h3 { font-size: 1.5em; }
+        .content h4 { font-size: 1.25em; }
+        .content h5 { font-size: 1.1em; }
+        .content h6 { font-size: 1em; }
 
         .content p {
             margin: 1em 0;
             line-height: 1.8;
+        }
+
+        .content a {
+            color: #3498db;
+            text-decoration: none;
+            transition: opacity 0.2s;
+        }
+
+        .content a:hover {
+            opacity: 0.8;
+            text-decoration: underline;
         }
 
         .content strong {
@@ -122,6 +130,10 @@
 
         .content em {
             font-style: italic;
+        }
+
+        .content del {
+            text-decoration: line-through;
         }
 
         .content blockquote {
@@ -139,6 +151,10 @@
 
         .content li {
             margin: 0.5em 0;
+        }
+
+        .content li > ul, .content li > ol {
+            margin: 0.25em 0;
         }
 
         .content code:not(pre code) {
@@ -162,6 +178,7 @@
             padding: 0;
             font-family: monospace;
             font-size: 0.9em;
+            color: #fff;
         }
 
         .content img {
@@ -172,6 +189,7 @@
             margin: 0 0.2em;
             cursor: pointer;
             transition: all 0.3s ease;
+            border-radius: 3px;
         }
 
         .content img.expanded {
@@ -189,6 +207,8 @@
             width: 100%;
             border-collapse: collapse;
             margin: 1em 0;
+            display: block;
+            overflow-x: auto;
         }
 
         .content th, .content td {
@@ -199,6 +219,7 @@
 
         .content th {
             background: rgba(255, 255, 255, 0.1);
+            font-weight: 600;
         }
 
         .content hr {
@@ -281,6 +302,18 @@
             z-index: 1999;
         }
 
+        .image-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 999;
+            display: none;
+            cursor: pointer;
+        }
+
         .toast {
             position: fixed;
             bottom: 20px;
@@ -345,7 +378,6 @@
     <script>
         const API_URL = 'https://ai-lf07.onrender.com';
 
-        // Configure marked.js
         marked.setOptions({
             breaks: true,
             gfm: true,
@@ -447,7 +479,6 @@
             const urlParams = new URLSearchParams(window.location.search);
             const docId = urlParams.get('id');
             const deleteCode = document.querySelector('#deleteCode').value;
-
             try {
                 const response = await fetch(`${API_URL}/delete/${docId}?code=${deleteCode}`, {
                     method: 'DELETE'
