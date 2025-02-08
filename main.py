@@ -11,7 +11,7 @@ import requests
 from dotenv import load_dotenv
 import os, re
 from pymongo import MongoClient, ASCENDING
-from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError
+from pymongo.errors import ConnectionFailure, ServerSelectionTimeoutError, DuplicateKeyError
 import pytz
 from waitress import serve
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -54,25 +54,36 @@ def connect_to_mongodb(max_retries=3, retry_delay=5):
 client = connect_to_mongodb()
 db = client[os.getenv('MONGODB_DB', 'documents_db')]
 
+# Drop existing indexes to recreate them properly
 try:
+    db.documents.drop_indexes()
+    # Create new indexes with proper configuration
     db.documents.create_index([("id", ASCENDING)], unique=True)
-    db.documents.create_index([("custom_url", ASCENDING)], unique=True, sparse=True)
+    db.documents.create_index([("custom_url", ASCENDING)], unique=True, 
+                            partialFilterExpression={"custom_url": {"$type": "string"}})
     db.documents.create_index([("created_at", ASCENDING)])
+    logger.info("Successfully recreated database indexes")
 except Exception as e:
     logger.error(f"Failed to create indexes: {e}")
 
 def generate_id(length=5):
-    while True:
+    attempts = 0
+    max_attempts = 3
+    while attempts < max_attempts:
         doc_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=length))
         if not db.documents.find_one({'id': doc_id}):
             return doc_id
+        attempts += 1
+    # If we failed to generate a unique ID, increase length and try again
+    return generate_id(length + 1)
 
 def generate_delete_code(length=8):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
 
 def keep_alive():
     try:
-        response = requests.get(f"https://ai-lf07.onrender.com/health")
+        app_url = os.getenv('APP_URL', 'https://ai-lf07.onrender.com')
+        response = requests.get(f"{app_url}/health", timeout=5)
         logger.info(f"Keep-alive ping status: {response.status_code}")
     except Exception as e:
         logger.error(f"Keep-alive ping failed: {e}")
@@ -93,11 +104,27 @@ def health_check():
         }), 500
 
 def validate_custom_url(url):
-    if not url:
+    if url is None:
         return True
     if not 3 <= len(url) <= 50:
         return False
     return bool(re.match('^[a-zA-Z0-9-]+$', url))
+
+def sanitize_document_fields(data):
+    # Define allowed fields and their default values
+    allowed_fields = {
+        'title': '',
+        'author': '',
+        'content': '',
+        'fontSize': '16px',
+        'textColor': '#000000',
+        'textFormat': 'none',
+        'lineHeight': '1.5',
+        'theme': 'light',
+        'custom_url': None
+    }
+    
+    return {k: data.get(k, v) for k, v in allowed_fields.items()}
 
 @app.route('/check-url/<custom_url>', methods=['GET'])
 @limiter.limit("20 per minute")
@@ -131,39 +158,39 @@ def publish_document():
             }), 400
 
         data = request.json
-        required_fields = ['title', 'content']
-        if not all(field in data for field in required_fields):
+        if not data.get('title') or not data.get('content'):
             return jsonify({
                 'success': False,
-                'error': f'Missing required fields: {", ".join(required_fields)}'
+                'error': 'Title and content are required'
             }), 400
 
         custom_url = data.get('custom_url')
-        if custom_url and not validate_custom_url(custom_url):
+        if custom_url is not None and not validate_custom_url(custom_url):
             return jsonify({
                 'success': False,
                 'error': 'Invalid custom URL format'
             }), 400
 
+        # Generate document ID and delete code
         doc_id = custom_url if custom_url else generate_id()
         delete_code = generate_delete_code()
         
+        # Sanitize and prepare document data
+        doc_data = sanitize_document_fields(data)
         document = {
             'id': doc_id,
-            'custom_url': custom_url,
             'delete_code': delete_code,
-            'title': data.get('title'),
-            'author': data.get('author'),
-            'content': data.get('content'),
-            'fontSize': data.get('fontSize', '16px'),
-            'textColor': data.get('textColor', '#000000'),
-            'textFormat': data.get('textFormat', 'none'),
-            'lineHeight': data.get('lineHeight', '1.5'),
-            'theme': data.get('theme', 'light'),
-            'created_at': datetime.now(pytz.UTC)
+            'created_at': datetime.now(pytz.UTC),
+            **doc_data
         }
         
-        db.documents.insert_one(document)
+        try:
+            db.documents.insert_one(document)
+        except DuplicateKeyError:
+            return jsonify({
+                'success': False,
+                'error': 'Custom URL already exists'
+            }), 409
             
         return jsonify({
             'success': True,
@@ -188,25 +215,21 @@ def get_document(doc_id):
             ]
         })
             
-        if doc:
+        if not doc:
             return jsonify({
-                'success': True,
-                'document': {
-                    'title': doc['title'],
-                    'author': doc.get('author', ''),
-                    'content': doc['content'],
-                    'fontSize': doc.get('fontSize', '16px'),
-                    'textColor': doc.get('textColor', '#000000'),
-                    'textFormat': doc.get('textFormat', 'none'),
-                    'lineHeight': doc.get('lineHeight', '1.5'),
-                    'theme': doc.get('theme', 'light'),
-                    'created_at': doc['created_at'].isoformat()
-                }
-            })
+                'success': False,
+                'error': 'Document not found'
+            }), 404
+
+        # Remove sensitive fields and format response
+        doc_data = {k: v for k, v in doc.items() 
+                   if k not in ['_id', 'id', 'delete_code', 'custom_url']}
+        doc_data['created_at'] = doc_data['created_at'].isoformat()
+            
         return jsonify({
-            'success': False,
-            'error': 'Document not found'
-        }), 404
+            'success': True,
+            'document': doc_data
+        })
     except Exception as e:
         logger.error(f"Error retrieving document: {e}")
         return jsonify({
